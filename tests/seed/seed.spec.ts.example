@@ -1,0 +1,25 @@
+import { test, expect } from '@playwright/test';
+
+/**
+ * Seed test for Cohort QA
+ * 
+ * This test sets up the environment and provides context for the planner.
+ * The planner will use this as an example for all generated tests.
+ * 
+ * Customize this file based on your application's setup needs:
+ * - Authentication
+ * - Database setup
+ * - API mocking
+ * - Custom fixtures
+ */
+test('seed', async ({ page }) => {
+  // Example: Navigate to your app's base URL
+  // await page.goto('/');
+  
+  // Example: Perform any necessary setup
+  // await page.waitForLoadState('networkidle');
+  
+  // This test should pass and provide a working page context
+  // The planner will use this as a template for generated tests
+});
+

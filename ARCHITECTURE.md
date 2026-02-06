@@ -1,0 +1,563 @@
+# Cohort QA Architecture
+
+This document provides a comprehensive overview of the Cohort QA system architecture, including modules, AI components, data flow, and configuration.
+
+## Table of Contents
+
+1. [High-Level Architecture](#high-level-architecture)
+2. [Core Modules](#core-modules)
+3. [AI Components](#ai-components)
+4. [Data Flow](#data-flow)
+5. [Configuration System](#configuration-system)
+6. [AI Usage Matrix](#ai-usage-matrix)
+
+---
+
+## High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLI (cli.ts)                            │
+│              Entry point for all commands                       │
+└────────────┬──────────────────────────────────────────────────┘
+             │
+             ├──────────────────┬──────────────────┬──────────────┐
+             │                  │                  │              │
+             ▼                  ▼                  ▼              ▼
+    ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+    │   Planner   │   │  Generator   │   │   Healer     │   │  Interactive │
+    │             │   │              │   │              │   │     Mode     │
+    └──────┬──────┘   └──────┬───────┘   └──────┬───────┘   └──────────────┘
+           │                 │                   │
+           │                 │                   │
+           ▼                 ▼                   ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │                    AI System                                │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+    │  │ DecisionMaker│  │PrefixGenerator│  │ TTS Providers│    │
+    │  │  (Planner)   │  │   (TTS)      │  │  (TTS)       │    │
+    │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │
+    │         │                  │                  │            │
+    │         ▼                  ▼                  ▼            │
+    │  ┌────────────────────────────────────────────────────┐   │
+    │  │           AI Provider Factory                      │   │
+    │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐        │   │
+    │  │  │ OpenAI   │  │Anthropic │  │ Ollama   │        │   │
+    │  │  │ Client   │  │ Client   │  │ Client   │        │   │
+    │  │  └──────────┘  └──────────┘  └──────────┘        │   │
+    │  └────────────────────────────────────────────────────┘   │
+    └─────────────────────────────────────────────────────────────┘
+           │
+           ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │              Configuration System (config.yaml)             │
+    │  - AI Provider Selection (Planner & TTS)                    │
+    │  - Model Selection                                           │
+    │  - Voice Selection (TTS)                                     │
+    │  - Planner Settings                                          │
+    └─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Core Modules
+
+### 1. Planner (`src/planner/`)
+
+The Planner module explores web applications and generates test plans.
+
+#### Components:
+
+- **`Planner.ts`** - Main orchestrator
+  - Manages browser sessions
+  - Coordinates exploration flow
+  - Tracks visited pages
+  - Generates test plans
+
+- **`elements/ElementDetector.ts`** - Finds interactive elements
+  - Scans DOM (including Shadow DOM)
+  - Filters by visibility and interactivity
+  - Excludes elements in ignored tags (header, nav, aside, footer)
+
+- **`interactions/InteractionHandler.ts`** - Handles user interactions
+  - Clicks buttons, links, inputs
+  - Fills form fields
+  - Handles navigation
+
+- **`interactions/CookieHandler.ts`** - Manages cookie consent
+  - Detects and dismisses cookie popups
+  - Sets default cookie preferences
+
+- **`navigation/NavigationManager.ts`** - Manages page navigation
+  - Ensures same-domain navigation
+  - Tracks URL changes
+  - Forces navigation when stuck
+
+- **`analysis/PageAnalyzer.ts`** - Analyzes page structure
+  - Extracts page title, URL
+  - Finds buttons, links, inputs, forms
+  - Collects headings
+
+- **`generation/TestPlanGenerator.ts`** - Generates test scenarios
+  - Creates page load scenarios
+  - Creates navigation scenarios
+  - Creates interaction scenarios
+
+- **`generation/MarkdownExporter.ts`** - Exports test plan to Markdown
+
+- **`utils/InteractionTracker.ts`** - Tracks recent interactions
+  - Prevents repeating same actions
+  - Maintains interaction history
+
+- **`utils/UrlNormalizer.ts`** - Normalizes URLs
+  - Removes fragments, query params
+  - Handles trailing slashes
+
+#### AI Integration:
+
+- Uses **DecisionMaker** to select best elements to interact with
+- AI analyzes page context and recommends actions
+- Falls back to heuristics if AI unavailable
+
+---
+
+### 2. Generator (`src/generator.ts`)
+
+Transforms Markdown test plans into executable Playwright tests.
+
+#### Process:
+
+1. Parses Markdown test plan
+2. Extracts scenarios, steps, expected results
+3. Generates Playwright test code
+4. Creates timestamped output directories
+5. Writes `.spec.ts` files
+
+#### Features:
+
+- Converts navigation steps to `page.goto()`
+- Converts click steps to `page.getByRole().click()`
+- Generates assertions for expected results
+- Includes page title verification
+- Verifies button/link text before clicking
+
+#### No AI Usage:
+
+- Pure code generation based on structured input
+- No AI components involved
+
+---
+
+### 3. Healer (`src/healer.ts`)
+
+Automatically fixes failing Playwright tests.
+
+#### Process:
+
+1. Runs Playwright tests
+2. Parses test failures
+3. Attempts to fix selectors/locators
+4. Re-runs tests to verify fixes
+5. Iterates up to max iterations
+
+#### Features:
+
+- Detects selector failures
+- Updates locators based on error messages
+- Handles element visibility issues
+- Retries with different strategies
+
+#### No AI Usage:
+
+- Uses heuristics and error analysis
+- No AI components involved
+
+---
+
+## AI Components
+
+### 1. DecisionMaker (`src/ai/DecisionMaker.ts`)
+
+**Purpose**: Selects the best interactive element to click/interact with during exploration.
+
+**Used By**: Planner module
+
+**AI Providers Supported**:
+- **Ollama** (default, free, local)
+  - Model: `mistral` (configurable via `config.yaml`)
+  - API: `http://localhost:11434/api/chat`
+- **OpenAI**
+  - Model: `gpt-4o-mini` (configurable)
+  - API: `https://api.openai.com/v1/chat/completions`
+- **Anthropic Claude**
+  - Model: `claude-3-haiku-20240307` (configurable)
+  - API: `https://api.anthropic.com/v1/messages`
+
+**Input**:
+- Page URL
+- Page title
+- Page headings (h1-h3)
+- List of interactive elements (buttons, links, inputs)
+- Recent interaction history
+
+**Output**:
+- Recommended element index
+- Reasoning (optional)
+
+**Fallback**:
+- If AI unavailable → **HeuristicSelector** (prioritizes links, then buttons)
+- If heuristics fail → Random selection
+
+**Configuration**:
+```yaml
+ai:
+  planner:
+    provider: ollama  # or openai, anthropic
+    model: mistral     # model name
+```
+
+---
+
+### 2. PrefixGenerator (`src/utils/tts/ai/PrefixGenerator.ts`)
+
+**Purpose**: Generates dynamic, personality-driven prefixes for TTS speech (e.g., "Oh!", "Hmm,", "Let me try").
+
+**Used By**: TTS module
+
+**AI Providers Supported**:
+- **OpenAI** (if `OPENAI_API_KEY` set)
+  - Model: `gpt-4o-mini` or `gpt-3.5-turbo`
+- **Anthropic Claude** (if `ANTHROPIC_API_KEY` set)
+  - Model: `claude-3-haiku-20240307`
+- **Ollama** (if available)
+  - Model: `mistral`
+
+**Input**:
+- Personality type: `realizing`, `deciding`, `acting`
+- Context text (what the AI is about to say)
+
+**Output**:
+- Dynamic prefix (e.g., "Oh!", "Hmm,", "Let me try", "I think")
+
+**Fallback**:
+- If AI unavailable → Uses hardcoded fallback prefixes from `config.yaml`
+
+**Caching**:
+- Uses `PrefixCache` to cache AI-generated prefixes
+- Reduces API calls for similar contexts
+
+**Configuration**:
+- Uses same AI provider as Planner (can be different)
+- Configured via `config.yaml` (but currently uses Planner's provider)
+
+---
+
+### 3. TTS Providers (`src/utils/tts/providers/`)
+
+**Purpose**: Text-to-Speech for AI personality (speaks thoughts and actions).
+
+**Used By**: Planner module (when `--tts` flag enabled)
+
+**Providers**:
+
+1. **OpenAI TTS** (preferred if API key available)
+   - Model: `tts-1` or `tts-1-hd`
+   - Voices: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`
+   - Natural, high-quality voices
+
+2. **Piper TTS** (free, offline)
+   - Voices: `amy`, `lessac`, `joe` (or custom .onnx files)
+   - Natural-sounding, offline
+   - Requires local installation
+
+3. **macOS `say`** (fallback)
+   - Voices: `Samantha`, `Alex`, `Victoria`, etc.
+   - Basic robotic voice
+   - Always available on macOS
+
+**Configuration**:
+```yaml
+ai:
+  tts:
+    provider: openai  # or piper, macos
+    model: tts-1      # for OpenAI
+    voice: nova       # voice name
+```
+
+---
+
+## Data Flow
+
+### Planner Exploration Flow
+
+```
+1. CLI → Planner.initialize()
+   ├─ Launches browser
+   ├─ Initializes DecisionMaker (AI)
+   ├─ Initializes TTS (if enabled)
+   └─ Prints configuration box
+
+2. Planner.explore()
+   ├─ Navigates to initial URL
+   ├─ Analyzes page (PageAnalyzer)
+   └─ Stores page info
+
+3. Loop: While navigations < maxNavigations
+   ├─ ElementDetector.findInteractiveElements()
+   │  └─ Returns list of buttons, links, inputs
+   │
+   ├─ DecisionMaker.recommendBestInteraction()
+   │  ├─ If AI enabled:
+   │  │  ├─ Builds PageContext (URL, title, headings, elements)
+   │  │  ├─ Calls AI Provider (Ollama/OpenAI/Anthropic)
+   │  │  ├─ AI returns recommended element index
+   │  │  └─ Returns recommendation
+   │  └─ If AI disabled/unavailable:
+   │     └─ HeuristicSelector.selectBestElement()
+   │
+   ├─ InteractionHandler.interactWithElement()
+   │  ├─ Verifies element exists
+   │  ├─ Clicks/fills element
+   │  └─ Waits for navigation/response
+   │
+   ├─ NavigationManager.ensureSameDomain()
+   │  └─ Verifies still on same domain
+   │
+   ├─ If URL changed:
+   │  ├─ PageAnalyzer.analyzePage()
+   │  ├─ Stores page info
+   │  └─ Increments navigation count
+   │
+   └─ InteractionTracker.rememberInteraction()
+      └─ Records interaction to avoid repeats
+
+4. TestPlanGenerator.generateScenarios()
+   ├─ Creates page load scenarios
+   ├─ Creates navigation scenarios
+   └─ Creates interaction scenarios
+
+5. MarkdownExporter.export()
+   └─ Writes test plan to Markdown file
+```
+
+### Generator Flow
+
+```
+1. CLI → Generator.generateTests()
+   ├─ Parses Markdown test plan
+   ├─ Extracts scenarios
+   └─ For each scenario:
+      ├─ Generates test code
+      ├─ Converts steps to Playwright code
+      ├─ Generates assertions
+      └─ Writes .spec.ts file
+```
+
+### TTS Flow (when enabled)
+
+```
+1. Planner finds interactive elements
+   └─ TTS.speakAnalysis()
+      ├─ "Oh! X elements found"
+      ├─ PrefixGenerator.generatePrefix("realizing")
+      │  └─ Calls AI (if available) or uses fallback
+      └─ TTS Provider speaks text
+
+2. Planner selects element
+   └─ TTS.speakAction()
+      ├─ PrefixGenerator.generatePrefix("acting")
+      └─ TTS Provider speaks action
+
+3. Planner completes exploration
+   └─ TTS.speak()
+      └─ TTS Provider speaks completion message
+```
+
+---
+
+## Configuration System
+
+### Configuration Hierarchy
+
+```
+1. Environment Variables (highest priority)
+   ├─ PLANNER_AI_PROVIDER
+   ├─ PLANNER_AI_MODEL
+   ├─ TTS_PROVIDER
+   ├─ TTS_MODEL
+   ├─ TTS_VOICE
+   └─ OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
+
+2. config.yaml (single source of truth)
+   ├─ ai.planner.provider
+   ├─ ai.planner.model
+   ├─ ai.tts.provider
+   ├─ ai.tts.model
+   ├─ ai.tts.voice
+   └─ planner.* settings
+
+3. Defaults (lowest priority)
+   ├─ Planner: Ollama + mistral
+   └─ TTS: OpenAI (if API key) → Piper → macOS
+```
+
+### Configuration File Structure
+
+```yaml
+# config.yaml
+ai:
+  planner:
+    provider: ollama  # [ollama, openai, anthropic]
+    model: mistral    # model name
+  
+  tts:
+    provider: openai  # [openai, piper, macos]
+    model: tts-1      # for OpenAI: [tts-1, tts-1-hd]
+    voice: nova       # OpenAI: [alloy, echo, fable, onyx, nova, shimmer]
+                      # Piper: [amy, lessac, joe]
+                      # macOS: [Samantha, Alex, Victoria, etc.]
+
+planner:
+  maxClicks: 50
+  maxConsecutiveFailures: 10
+  ignoredTags: [header, nav, aside, footer, dbs-top-bar]
+  # ... more settings
+
+tts:
+  # Technical settings (paths, shortcuts, fallbacks)
+  # Provider/model/voice are in ai.tts above
+```
+
+---
+
+## AI Usage Matrix
+
+| Component | AI Used? | Provider | Model | Purpose | Fallback |
+|-----------|----------|----------|-------|---------|----------|
+| **Planner - Element Selection** | ✅ Yes | Ollama/OpenAI/Anthropic | `mistral`/`gpt-4o-mini`/`claude-3-haiku` | Selects best element to interact with | HeuristicSelector → Random |
+| **TTS - Prefix Generation** | ✅ Yes | Same as Planner | Same as Planner | Generates dynamic speech prefixes | Hardcoded fallbacks |
+| **TTS - Speech Synthesis** | ❌ No | OpenAI TTS API | `tts-1`/`tts-1-hd` | Converts text to speech | Piper → macOS `say` |
+| **Generator** | ❌ No | N/A | N/A | Code generation | N/A |
+| **Healer** | ❌ No | N/A | N/A | Test fixing | N/A |
+
+### When AI is Used
+
+1. **Planner Element Selection** (when `--ai` flag enabled):
+   - Every time planner needs to select an element to interact with
+   - AI receives page context and element list
+   - AI returns recommendation with reasoning
+
+2. **TTS Prefix Generation** (when `--tts` flag enabled):
+   - When TTS needs to speak with personality
+   - Generates prefixes like "Oh!", "Hmm,", "Let me try"
+   - Cached to reduce API calls
+
+### When AI is NOT Used
+
+1. **Generator**: Pure code transformation, no AI needed
+2. **Healer**: Uses error analysis and heuristics
+3. **TTS Speech Synthesis**: Uses dedicated TTS APIs (not LLMs)
+
+---
+
+## Module Dependencies
+
+```
+CLI
+├─ Planner
+│  ├─ DecisionMaker (AI)
+│  │  ├─ ProviderFactory
+│  │  │  ├─ OpenAIClient
+│  │  │  ├─ AnthropicClient
+│  │  │  └─ OllamaClient
+│  │  └─ HeuristicSelector (fallback)
+│  ├─ ElementDetector
+│  ├─ InteractionHandler
+│  ├─ NavigationManager
+│  ├─ PageAnalyzer
+│  ├─ TestPlanGenerator
+│  ├─ MarkdownExporter
+│  └─ TTS (optional)
+│     ├─ PrefixGenerator (AI)
+│     │  └─ Uses same AI providers as DecisionMaker
+│     ├─ OpenAIProvider
+│     ├─ PiperProvider
+│     └─ MacOSProvider
+├─ Generator
+└─ Healer
+
+Config System
+├─ config-loader.ts
+│  └─ Reads config.yaml
+└─ ai-config.ts
+   └─ Wrapper for config-loader
+```
+
+---
+
+## Key Design Decisions
+
+1. **Separate AI Providers for Planner and TTS**:
+   - Planner can use Ollama (free, local)
+   - TTS can use OpenAI (better voices)
+   - Configured independently in `config.yaml`
+
+2. **Graceful Degradation**:
+   - AI → Heuristics → Random (for element selection)
+   - AI prefixes → Hardcoded fallbacks (for TTS)
+   - OpenAI TTS → Piper → macOS `say` (for speech)
+
+3. **Modular Architecture**:
+   - Each component is independent
+   - Easy to swap implementations
+   - Clear separation of concerns
+
+4. **Configuration Hierarchy**:
+   - Environment variables override config.yaml
+   - config.yaml is single source of truth
+   - Sensible defaults for everything
+
+---
+
+## File Organization
+
+```
+src/
+├── cli.ts                    # CLI entry point
+├── planner/                  # Planner module
+│   ├── Planner.ts           # Main orchestrator
+│   ├── elements/            # Element detection
+│   ├── interactions/        # User interactions
+│   ├── navigation/          # Navigation management
+│   ├── analysis/            # Page analysis
+│   ├── generation/         # Test plan generation
+│   └── utils/              # Utilities
+├── generator.ts             # Test code generator
+├── healer.ts               # Test healer
+├── ai/                     # AI components
+│   ├── DecisionMaker.ts    # Element selection AI
+│   ├── ProviderFactory.ts  # AI provider factory
+│   ├── clients/           # AI client implementations
+│   └── HeuristicSelector.ts # Fallback selector
+├── utils/tts/              # Text-to-Speech
+│   ├── TTS.ts             # Main TTS orchestrator
+│   ├── ai/                # AI prefix generation
+│   ├── providers/          # TTS providers
+│   └── cache/             # Prefix caching
+└── config/                 # Configuration
+    ├── config-loader.ts    # YAML config loader
+    └── ai-config.ts        # AI config wrapper
+```
+
+---
+
+## Summary
+
+- **Planner**: Uses AI (Ollama/OpenAI/Anthropic) for smart element selection
+- **Generator**: No AI, pure code transformation
+- **Healer**: No AI, uses heuristics and error analysis
+- **TTS**: Uses AI for prefix generation, dedicated APIs for speech synthesis
+- **Configuration**: Centralized in `config.yaml` with environment variable overrides
+
+The system is designed to work with or without AI, gracefully degrading to heuristics when AI is unavailable.
+
