@@ -34,8 +34,13 @@ This document provides a comprehensive overview of the Cohort QA system architec
     ┌─────────────────────────────────────────────────────────────┐
     │                    AI System                                │
     │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
-    │  │ DecisionMaker│  │PrefixGenerator│  │ TTS Providers│    │
-    │  │  (Planner)   │  │   (TTS)      │  │  (TTS)       │    │
+    │  │ DecisionMaker│  │TestCodeGenAI  │  │TestHealerAI  │    │
+    │  │  (Planner)   │  │ (Generator)   │  │  (Healer)    │    │
+    │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │
+    │         │                  │                  │            │
+    │  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐    │
+    │  │PrefixGenerator│  │              │  │              │    │
+    │  │   (TTS)      │  │              │  │              │    │
     │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │
     │         │                  │                  │            │
     │         ▼                  ▼                  ▼            │
@@ -46,6 +51,12 @@ This document provides a comprehensive overview of the Cohort QA system architec
     │  │  │ Client   │  │ Client   │  │ Client   │        │   │
     │  │  └──────────┘  └──────────┘  └──────────┘        │   │
     │  └────────────────────────────────────────────────────┘   │
+    │         │                  │                  │            │
+    │         ▼                  ▼                  ▼            │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+    │  │ TTS Providers│  │  Heuristics │  │  Heuristics  │    │
+    │  │  (TTS)       │  │ (Generator) │  │  (Healer)    │    │
+    │  └──────────────┘  └──────────────┘  └──────────────┘    │
     └─────────────────────────────────────────────────────────────┘
            │
            ▼
@@ -125,11 +136,24 @@ The Planner module explores web applications and generates test plans.
 
 Transforms Markdown test plans into executable Playwright tests.
 
+#### Components:
+
+- **`Generator.ts`** - Main orchestrator
+  - Parses Markdown test plans
+  - Coordinates test code generation
+  - Creates timestamped output directories
+  - Writes `.spec.ts` files
+
+- **`generator/TestCodeGenerator.ts`** - AI-powered test code generator
+  - Uses AI to generate Playwright test code from scenarios
+  - Analyzes test scenarios and generates best-practice code
+  - Falls back to heuristic generation if AI unavailable
+
 #### Process:
 
 1. Parses Markdown test plan
 2. Extracts scenarios, steps, expected results
-3. Generates Playwright test code
+3. Generates Playwright test code (using AI if available)
 4. Creates timestamped output directories
 5. Writes `.spec.ts` files
 
@@ -140,25 +164,56 @@ Transforms Markdown test plans into executable Playwright tests.
 - Generates assertions for expected results
 - Includes page title verification
 - Verifies button/link text before clicking
+- AI-powered code generation with best practices
 
-#### No AI Usage:
+#### AI Integration:
 
-- Pure code generation based on structured input
-- No AI components involved
+- Uses **TestCodeGenerator** to generate test code using AI
+- AI analyzes test scenarios and generates maintainable, best-practice code
+- Falls back to heuristic-based code generation if AI unavailable
 
 ---
 
-### 3. Healer (`src/healer.ts`)
+### 3. Healer (`src/healer/`)
 
 Automatically fixes failing Playwright tests.
+
+#### Components:
+
+- **`Healer.ts`** - Main orchestrator
+  - Manages test execution
+  - Coordinates healing process
+  - Iterates until tests pass or max iterations reached
+
+- **`ai/TestHealerAI.ts`** - AI-powered test healer
+  - Uses AI to intelligently fix broken tests
+  - Analyzes test failures and suggests best selector strategies
+  - Focuses on test coverage, maintainability, and best practices
+  - Falls back to heuristic fixers if AI unavailable
+
+- **`fixes/TestCodeFixer.ts`** - Orchestrates all fixers
+  - Tries AI healing first (if available)
+  - Falls back to heuristic fixers (SelectorFixer, NavigationFixer, etc.)
+
+- **`fixes/SelectorFixer.ts`** - Fixes selector issues
+- **`fixes/NavigationFixer.ts`** - Fixes navigation issues
+- **`fixes/TimeoutFixer.ts`** - Fixes timeout issues
+- **`fixes/AssertionFixer.ts`** - Fixes assertion issues
+- **`fixes/WaitTimeFixer.ts`** - Adds wait times for flaky tests
+
+- **`runner/TestRunner.ts`** - Runs Playwright tests
+- **`parsing/TestFailureParser.ts`** - Parses test failures
+- **`utils/FileResolver.ts`** - Resolves test file paths
+- **`utils/AnsiCodeStripper.ts`** - Strips ANSI codes from output
 
 #### Process:
 
 1. Runs Playwright tests
 2. Parses test failures
-3. Attempts to fix selectors/locators
-4. Re-runs tests to verify fixes
-5. Iterates up to max iterations
+3. Attempts to fix using AI (if available)
+4. Falls back to heuristic fixers if AI unavailable
+5. Re-runs tests to verify fixes
+6. Iterates up to max iterations
 
 #### Features:
 
@@ -166,11 +221,15 @@ Automatically fixes failing Playwright tests.
 - Updates locators based on error messages
 - Handles element visibility issues
 - Retries with different strategies
+- AI-powered intelligent selector selection
+- Best-practice code generation
 
-#### No AI Usage:
+#### AI Integration:
 
-- Uses heuristics and error analysis
-- No AI components involved
+- Uses **TestHealerAI** to intelligently fix broken tests
+- AI analyzes test failures and suggests best selector strategies
+- Focuses on test coverage, maintainability, and Playwright best practices
+- Falls back to heuristic-based fixers if AI unavailable
 
 ---
 
@@ -347,10 +406,52 @@ ai:
    ├─ Parses Markdown test plan
    ├─ Extracts scenarios
    └─ For each scenario:
-      ├─ Generates test code
-      ├─ Converts steps to Playwright code
-      ├─ Generates assertions
+      ├─ TestCodeGenerator.generate()
+      │  ├─ If AI enabled:
+      │  │  ├─ Builds prompt with scenario context
+      │  │  ├─ Calls AI Provider (Ollama/OpenAI/Anthropic)
+      │  │  ├─ AI generates complete test code
+      │  │  ├─ Validates code completeness
+      │  │  └─ Returns AI-generated code
+      │  └─ If AI disabled/unavailable:
+      │     └─ Falls back to heuristic generation
+      │        ├─ Converts steps to Playwright code
+      │        ├─ Generates assertions
+      │        └─ Returns heuristic-generated code
       └─ Writes .spec.ts file
+```
+
+### Healer Flow
+
+```
+1. CLI → Healer.healAllFailures()
+   ├─ TestRunner.runTests()
+   │  └─ Executes Playwright tests
+   │
+   ├─ TestFailureParser.parseFailures()
+   │  └─ Extracts test failures from output
+   │
+   └─ For each failure:
+      ├─ TestCodeFixer.fix()
+      │  ├─ If AI enabled:
+      │  │  ├─ TestHealerAI.heal()
+      │  │  │  ├─ Builds prompt with test code, error, context
+      │  │  │  ├─ Calls AI Provider (Ollama/OpenAI/Anthropic)
+      │  │  │  ├─ AI analyzes failure and suggests fixes
+      │  │  │  ├─ AI generates fixed code with best selectors
+      │  │  │  ├─ Validates code completeness
+      │  │  │  └─ Returns AI-fixed code
+      │  │  └─ Returns AI fix result
+      │  └─ If AI disabled/unavailable:
+      │     └─ Falls back to heuristic fixers
+      │        ├─ SelectorFixer.fix()
+      │        ├─ NavigationFixer.fix()
+      │        ├─ TimeoutFixer.fix()
+      │        ├─ AssertionFixer.fix()
+      │        └─ WaitTimeFixer.fix()
+      │
+      ├─ Writes fixed code to file
+      └─ Re-runs tests to verify fix
 ```
 
 ### TTS Flow (when enabled)
@@ -391,6 +492,10 @@ ai:
 2. config.yaml (single source of truth)
    ├─ ai.planner.provider
    ├─ ai.planner.model
+   ├─ ai.generator.provider
+   ├─ ai.generator.model
+   ├─ ai.healer.provider
+   ├─ ai.healer.model
    ├─ ai.tts.provider
    ├─ ai.tts.model
    ├─ ai.tts.voice
@@ -407,7 +512,15 @@ ai:
 # config.yaml
 ai:
   planner:
-    provider: ollama  # [ollama, openai, anthropic]
+    provider: ollama  # [heuristic, ollama, openai, anthropic]
+    model: mistral    # model name
+  
+  generator:
+    provider: heuristic  # [heuristic, ollama, openai, anthropic]
+    model: mistral    # model name
+  
+  healer:
+    provider: heuristic  # [heuristic, ollama, openai, anthropic]
     model: mistral    # model name
   
   tts:
@@ -435,10 +548,10 @@ tts:
 | Component | AI Used? | Provider | Model | Purpose | Fallback |
 |-----------|----------|----------|-------|---------|----------|
 | **Planner - Element Selection** | ✅ Yes | Ollama/OpenAI/Anthropic | `mistral`/`gpt-4o-mini`/`claude-3-haiku` | Selects best element to interact with | HeuristicSelector → Random |
+| **Generator - Test Code Generation** | ✅ Yes | Ollama/OpenAI/Anthropic | `mistral`/`gpt-4o-mini`/`claude-3-haiku` | Generates Playwright test code from scenarios | Heuristic code generation |
+| **Healer - Test Fixing** | ✅ Yes | Ollama/OpenAI/Anthropic | `mistral`/`gpt-4o-mini`/`claude-3-haiku` | Intelligently fixes broken tests with best selectors | Heuristic fixers (SelectorFixer, NavigationFixer, etc.) |
 | **TTS - Prefix Generation** | ✅ Yes | Same as Planner | Same as Planner | Generates dynamic speech prefixes | Hardcoded fallbacks |
 | **TTS - Speech Synthesis** | ❌ No | OpenAI TTS API | `tts-1`/`tts-1-hd` | Converts text to speech | Piper → macOS `say` |
-| **Generator** | ❌ No | N/A | N/A | Code generation | N/A |
-| **Healer** | ❌ No | N/A | N/A | Test fixing | N/A |
 
 ### When AI is Used
 
@@ -447,16 +560,28 @@ tts:
    - AI receives page context and element list
    - AI returns recommendation with reasoning
 
-2. **TTS Prefix Generation** (when `--tts` flag enabled):
+2. **Generator Test Code Generation** (when AI provider configured):
+   - For each test scenario in the Markdown plan
+   - AI receives scenario context (steps, expected results)
+   - AI generates complete Playwright test code following best practices
+   - Validates code completeness before saving
+
+3. **Healer Test Fixing** (when AI provider configured):
+   - For each test failure detected
+   - AI receives test code, error message, and context
+   - AI analyzes failure and suggests best selector strategies
+   - AI generates fixed code focusing on coverage and maintainability
+   - Validates code completeness before saving
+
+4. **TTS Prefix Generation** (when `--tts` flag enabled):
    - When TTS needs to speak with personality
    - Generates prefixes like "Oh!", "Hmm,", "Let me try"
    - Cached to reduce API calls
 
 ### When AI is NOT Used
 
-1. **Generator**: Pure code transformation, no AI needed
-2. **Healer**: Uses error analysis and heuristics
-3. **TTS Speech Synthesis**: Uses dedicated TTS APIs (not LLMs)
+1. **TTS Speech Synthesis**: Uses dedicated TTS APIs (not LLMs)
+2. **Heuristic Fallbacks**: All AI components gracefully fall back to heuristics when AI is unavailable or disabled
 
 ---
 
@@ -484,7 +609,28 @@ CLI
 │     ├─ PiperProvider
 │     └─ MacOSProvider
 ├─ Generator
+│  ├─ TestCodeGenerator (AI)
+│  │  ├─ ProviderFactory
+│  │  │  ├─ OpenAIClient
+│  │  │  ├─ AnthropicClient
+│  │  │  └─ OllamaClient
+│  │  └─ Heuristic generation (fallback)
+│  └─ Generator.ts (orchestrator)
 └─ Healer
+   ├─ TestHealerAI (AI)
+   │  ├─ ProviderFactory
+   │  │  ├─ OpenAIClient
+   │  │  ├─ AnthropicClient
+   │  │  └─ OllamaClient
+   │  └─ Heuristic fixers (fallback)
+   ├─ TestCodeFixer (orchestrator)
+   ├─ SelectorFixer
+   ├─ NavigationFixer
+   ├─ TimeoutFixer
+   ├─ AssertionFixer
+   ├─ WaitTimeFixer
+   ├─ TestRunner
+   └─ TestFailureParser
 
 Config System
 ├─ config-loader.ts
@@ -532,12 +678,34 @@ src/
 │   ├── analysis/            # Page analysis
 │   ├── generation/         # Test plan generation
 │   └── utils/              # Utilities
-├── generator.ts             # Test code generator
-├── healer.ts               # Test healer
+├── generator.ts             # Test code generator (orchestrator)
+├── generator/               # Generator module
+│   └── TestCodeGenerator.ts # AI-powered test code generator
+├── healer/                  # Healer module
+│   ├── Healer.ts           # Main orchestrator
+│   ├── ai/                 # AI-powered healing
+│   │   └── TestHealerAI.ts # AI test healer
+│   ├── fixes/              # Heuristic fixers
+│   │   ├── TestCodeFixer.ts # Orchestrator
+│   │   ├── SelectorFixer.ts
+│   │   ├── NavigationFixer.ts
+│   │   ├── TimeoutFixer.ts
+│   │   ├── AssertionFixer.ts
+│   │   └── WaitTimeFixer.ts
+│   ├── runner/             # Test execution
+│   │   └── TestRunner.ts
+│   ├── parsing/            # Failure parsing
+│   │   └── TestFailureParser.ts
+│   └── utils/              # Utilities
+│       ├── FileResolver.ts
+│       └── AnsiCodeStripper.ts
 ├── ai/                     # AI components
-│   ├── DecisionMaker.ts    # Element selection AI
+│   ├── DecisionMaker.ts    # Element selection AI (Planner)
 │   ├── ProviderFactory.ts  # AI provider factory
 │   ├── clients/           # AI client implementations
+│   │   ├── OpenAIClient.ts
+│   │   ├── AnthropicClient.ts
+│   │   └── OllamaClient.ts
 │   └── HeuristicSelector.ts # Fallback selector
 ├── utils/tts/              # Text-to-Speech
 │   ├── TTS.ts             # Main TTS orchestrator
@@ -553,11 +721,12 @@ src/
 
 ## Summary
 
-- **Planner**: Uses AI (Ollama/OpenAI/Anthropic) for smart element selection
-- **Generator**: No AI, pure code transformation
-- **Healer**: No AI, uses heuristics and error analysis
+- **Planner**: Uses AI (Ollama/OpenAI/Anthropic) for smart element selection, falls back to heuristics
+- **Generator**: Uses AI (Ollama/OpenAI/Anthropic) for intelligent test code generation, falls back to heuristics
+- **Healer**: Uses AI (Ollama/OpenAI/Anthropic) for intelligent test fixing with best selectors, falls back to heuristic fixers
 - **TTS**: Uses AI for prefix generation, dedicated APIs for speech synthesis
 - **Configuration**: Centralized in `config.yaml` with environment variable overrides
+- **AI Providers**: Each component (Planner, Generator, Healer) can use independent AI providers and models
 
-The system is designed to work with or without AI, gracefully degrading to heuristics when AI is unavailable.
+The system is designed to work with or without AI, gracefully degrading to heuristics when AI is unavailable. All AI components support the `heuristic` provider option to explicitly disable AI and use heuristics only.
 

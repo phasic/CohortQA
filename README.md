@@ -189,9 +189,40 @@ Options:
 - `--test-dir <dir>`: Directory for generated tests (default: `./tests`)
 - `--skip-heal`: Skip the healing step
 
-## AI-Powered Exploration
+## AI Integration
 
-The planner can use AI to make smarter decisions about which elements to interact with, prioritizing actions that are most valuable for test coverage.
+Cohort QA uses AI across all three components (Planner, Generator, and Healer) to make intelligent decisions and generate high-quality test code.
+
+### AI-Powered Components
+
+1. **🎭 Planner**: Uses AI to select the best elements to interact with during exploration
+2. **🎭 Generator**: Uses AI to generate maintainable, best-practice Playwright test code
+3. **🎭 Healer**: Uses AI to intelligently fix broken tests with optimal selector strategies
+
+All AI components support graceful fallback to heuristics when AI is unavailable or disabled.
+
+### Configuration
+
+AI providers and models are configured in `config.yaml`:
+
+```yaml
+ai:
+  planner:
+    provider: ollama  # Options: [heuristic, ollama, openai, anthropic]
+    model: mistral    # Model name
+  
+  generator:
+    provider: heuristic  # Options: [heuristic, ollama, openai, anthropic]
+    model: mistral    # Model name
+  
+  healer:
+    provider: ollama  # Options: [heuristic, ollama, openai, anthropic]
+    model: mistral    # Model name
+```
+
+You can also use environment variables:
+- `PLANNER_AI_PROVIDER`, `GENERATOR_AI_PROVIDER`, `HEALER_AI_PROVIDER`
+- `PLANNER_AI_MODEL`, `GENERATOR_AI_MODEL`, `HEALER_AI_MODEL`
 
 ### Setup
 
@@ -203,35 +234,23 @@ The planner can use AI to make smarter decisions about which elements to interac
    ```
 3. Make sure Ollama is running (it starts automatically, or run `ollama serve`)
 
-That's it! The planner defaults to Ollama if no API keys are set.
+That's it! Components default to Ollama if no API keys are set.
 
 **Alternative: Cloud AI Providers**
 
 1. **OpenAI**:
    ```bash
    export OPENAI_API_KEY="your-api-key-here"
-   export AI_PROVIDER="openai"
    ```
 
 2. **Anthropic Claude**:
    ```bash
    export ANTHROPIC_API_KEY="your-api-key-here"
-   export AI_PROVIDER="anthropic"
    ```
 
-### Usage
+### How AI Works in Each Component
 
-```bash
-# With Ollama (default, free)
-npm start -- plan -u https://example.com --ai
-
-# Or in interactive mode, you'll be prompted to enable AI
-npm start -- interactive
-```
-
-**Note**: The planner defaults to Ollama if no API keys are found, so `--ai` will use Ollama automatically!
-
-### How It Works
+#### Planner - Element Selection
 
 When AI is enabled, the planner:
 1. Scans the page for all interactive elements
@@ -245,11 +264,45 @@ The AI considers:
 - **Test value**: Elements that reveal new functionality
 - **Efficiency**: Avoiding redundant interactions
 
+#### Generator - Test Code Generation
+
+When AI is enabled, the generator:
+1. Analyzes each test scenario from the Markdown plan
+2. Sends scenario context (steps, expected results) to the AI
+3. AI generates complete Playwright test code following best practices
+4. Validates code completeness before saving
+
+The AI generates:
+- Proper selector strategies (getByRole, getByLabel, etc.)
+- Appropriate wait conditions and timeouts
+- Maintainable and readable test code
+- Best-practice assertions
+
+#### Healer - Test Fixing
+
+When AI is enabled, the healer:
+1. Analyzes test failures with full context (test code, error message, line numbers)
+2. Sends failure context to the AI
+3. AI suggests best selector strategies and fixes
+4. Generates fixed code focusing on coverage and maintainability
+5. Validates code completeness before saving
+
+The AI focuses on:
+- **Best selector strategies**: getByRole, getByLabel, getByPlaceholder, etc.
+- **Test coverage**: Selectors that provide good coverage
+- **Maintainability**: Code that's easy to read and maintain
+- **Playwright best practices**: Following official recommendations
+
 ### Fallback Behavior
 
-If AI is unavailable or fails:
-- Falls back to **heuristic-based selection** (prioritizes links, then action buttons)
-- If heuristics fail, falls back to **random selection**
+All AI components gracefully fall back to heuristics when:
+- AI is unavailable (no API keys, server down, etc.)
+- AI fails (timeout, error, etc.)
+- `provider: heuristic` is explicitly set in config
+
+**Planner**: Falls back to heuristic-based selection → random selection  
+**Generator**: Falls back to heuristic-based code generation  
+**Healer**: Falls back to heuristic fixers (SelectorFixer, NavigationFixer, etc.)
 
 ## Project Structure
 
@@ -319,20 +372,24 @@ npm start -- plan -u https://example.com -s tests/seed.spec.ts
 ### Generator
 
 - Parses Markdown test plans from `specs/`
+- Uses AI (if enabled) to generate maintainable, best-practice Playwright code
+- Falls back to heuristic-based code generation if AI unavailable
 - Converts natural language steps into Playwright code
-- Verifies selectors and assertions live
-- Generates executable test files in `tests/`
+- Generates executable test files in `tests/` (timestamped folders)
 - Follows Playwright's test structure and best practices
+- Includes proper selectors, wait conditions, and assertions
 
 ### Healer
 
 - Runs Playwright tests and detects failures
-- Replays failing steps and inspects the UI
+- Uses AI (if enabled) to intelligently fix broken tests with optimal selectors
+- Falls back to heuristic fixers if AI unavailable
 - Automatically fixes common issues:
+  - Selector issues (chooses best selectors for context and coverage)
   - Timeout problems (increases wait times)
-  - Selector issues (uses more robust selectors)
   - Navigation errors (adds proper wait conditions)
   - Assertion failures (adjusts assertions)
+- Focuses on test coverage, maintainability, and best practices
 - Iteratively retries until tests pass or max iterations reached
 
 ## Environment Variables
@@ -348,24 +405,32 @@ You can set environment variables in two ways:
 
 ### AI Provider Options
 
-**OpenAI** (default):
+Each component (Planner, Generator, Healer) can use independent AI providers:
+
+**OpenAI**:
 - `OPENAI_API_KEY`: Your OpenAI API key
 - `OPENAI_MODEL`: Model to use (default: `gpt-4o-mini`)
+- Configure in `config.yaml`: `ai.planner.provider: openai` (or `generator`, `healer`)
 
 **Anthropic Claude**:
 - `ANTHROPIC_API_KEY`: Your Anthropic API key
-- `AI_PROVIDER`: Set to `"anthropic"`
 - `ANTHROPIC_MODEL`: Model to use (default: `claude-3-haiku-20240307`)
+- Configure in `config.yaml`: `ai.planner.provider: anthropic` (or `generator`, `healer`)
 
 **Local Ollama** (default, free, no API costs):
-- `AI_PROVIDER`: Set to `"ollama"` (default if no API keys found)
 - `OLLAMA_URL`: Ollama server URL (default: `http://localhost:11434/api/chat`)
 - `OLLAMA_MODEL`: Model to use (default: `mistral`)
+- Configure in `config.yaml`: `ai.planner.provider: ollama` (or `generator`, `healer`)
+- Default if no API keys found
+
+**Heuristic (No AI)**:
+- Set `provider: heuristic` in `config.yaml` to explicitly disable AI
+- Uses heuristic-based algorithms instead
 
 To use Ollama (local, free):
 1. Install Ollama: https://ollama.ai
 2. Pull Mistral model: `ollama pull mistral`
-3. Run: `npm start -- plan -u https://example.com --ai` (Ollama is the default!)
+3. Configure in `config.yaml` or use defaults
 
 ## Text-to-Speech (TTS)
 
