@@ -69,8 +69,8 @@ export class ProviderFactory {
               apiUrl: 'https://api.openai.com/v1/chat/completions',
               apiKey,
               model: config.planner.model || process.env.OPENAI_MODEL || process.env.PLANNER_AI_MODEL || 'gpt-4o-mini',
-              temperature: 0.3,
-              maxTokens: 300
+              temperature: 0.2, // Lower for faster, more deterministic responses
+              maxTokens: 150 // Reduced - we only need elementIndex and brief reasoning
             };
           }
           
@@ -83,8 +83,8 @@ export class ProviderFactory {
               apiUrl: 'https://api.anthropic.com/v1/messages',
               apiKey,
               model: config.planner.model || process.env.ANTHROPIC_MODEL || process.env.PLANNER_AI_MODEL || 'claude-3-haiku-20240307',
-              temperature: 0.3,
-              maxTokens: 300
+              temperature: 0.2, // Lower for faster, more deterministic responses
+              maxTokens: 150 // Reduced - we only need elementIndex and brief reasoning
             };
           }
       
@@ -94,7 +94,7 @@ export class ProviderFactory {
         return {
           apiUrl,
           model: config.planner.model || process.env.OLLAMA_MODEL || process.env.PLANNER_AI_MODEL || 'mistral',
-          temperature: 0.3
+          temperature: 0.2 // Lower for faster, more deterministic responses
         };
       }
       

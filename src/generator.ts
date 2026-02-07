@@ -87,10 +87,6 @@ export class Generator {
     
     // Store the generated directory path for return (will be used by CLI to display)
     (this as any).lastGeneratedDir = generatedDir;
-    
-    // Calculate relative path from generated directory to fixtures file
-    // Generated tests are in tests/generated-*/ so fixtures is at tests/fixtures.ts
-    (this as any).fixturesPath = path.relative(generatedDir, path.join(outputDir, 'fixtures'));
 
     // Generate a test file for each scenario
     for (const scenario of scenarios) {
@@ -192,13 +188,14 @@ export class Generator {
       if (urlMatch) {
         const url = urlMatch[1].trim();
         if (url.startsWith('http')) {
-          code += `  await page.goto('${this.escapeString(url)}', { waitUntil: 'networkidle' });\n`;
+          code += `  await page.goto('${this.escapeString(url)}', { waitUntil: 'domcontentloaded', timeout: 30000 });\n`;
         } else {
-          code += `  await page.goto(\`\${'${this.escapeString(baseUrl)}'}${this.escapeString(url)}\`, { waitUntil: 'networkidle' });\n`;
+          code += `  await page.goto(\`\${'${this.escapeString(baseUrl)}'}${this.escapeString(url)}\`, { waitUntil: 'domcontentloaded', timeout: 30000 });\n`;
         }
       } else {
-        code += `  await page.goto('${this.escapeString(baseUrl)}', { waitUntil: 'networkidle' });\n`;
+        code += `  await page.goto('${this.escapeString(baseUrl)}', { waitUntil: 'domcontentloaded', timeout: 30000 });\n`;
       }
+      code += `  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});\n`;
       code += `  await page.waitForTimeout(1000);\n`;
     }
 

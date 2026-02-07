@@ -302,19 +302,25 @@ export class Planner {
             };
           });
           
-          // Build full context for AI
+          // Limit elements shown to AI for faster processing
+          // Randomly select a subset to give variety across runs
+          const maxElementsToShow = PLANNER_CONFIG.MAX_ELEMENTS_TO_SHOW_AI;
+          const shuffled = [...interactiveElements].sort(() => Math.random() - 0.5);
+          const elementsForAI = shuffled.slice(0, maxElementsToShow);
+          
+          // Build context for AI (only with subset of elements for speed)
           const fullContext: PageContext = {
             url: pageContextData.url,
             title: pageContextData.title,
             headings: pageContextData.headings,
-            elements: interactiveElements.map((el, idx) => ({
+            elements: elementsForAI.map((el, idx) => ({
               ...el,
               index: idx
             })),
             visitedUrls: Array.from(this.visitedUrls),
             targetNavigations: this.currentMaxNavigations,
             currentNavigations: this.visitedUrls.size,
-            recentInteractionKeys: this.interactionTracker.getRecentKeys(20)
+            recentInteractionKeys: this.interactionTracker.getRecentKeys(5) // Reduced from 20 to 5
           };
           
           // Skip verbose thinking - too chatty
@@ -324,7 +330,8 @@ export class Planner {
           if (recommendation) {
             // Skip speaking reasoning - only speak when elements found and when clicking
             // Guardrail: don't let AI spam the same element (especially Home)
-            const proposed = interactiveElements[recommendation.elementIndex];
+            // Map AI index back to full array (AI only sees subset)
+            const proposed = elementsForAI[recommendation.elementIndex];
             const proposedKey = this.interactionTracker.makeInteractionKey(proposed);
             const proposedText = (proposed.text || '').toLowerCase();
             const proposedHref = (proposed.href || '').split('#')[0].replace(/\/$/, '');
@@ -361,8 +368,31 @@ export class Planner {
                 selectionMethod = 'heuristic (AI repeated)';
               }
             } else {
-              selectedIndex = recommendation.elementIndex;
-              selectionMethod = 'AI';
+              // Find the proposed element in the full interactiveElements array
+              // (since AI index is relative to the subset, not the full array)
+              const proposedIndex = interactiveElements.findIndex(el => {
+                // Match by href for links (most reliable)
+                if (proposed.isLink && proposed.href && el.isLink && el.href) {
+                  const proposedHrefNorm = proposed.href.split('#')[0].replace(/\/$/, '');
+                  const elHrefNorm = el.href.split('#')[0].replace(/\/$/, '');
+                  return proposedHrefNorm === elHrefNorm;
+                }
+                // Match by text if available
+                if (proposed.text && el.text && proposed.text.trim() && el.text.trim()) {
+                  return proposed.text.trim().toLowerCase() === el.text.trim().toLowerCase();
+                }
+                // Fallback to selector
+                return proposed.selector === el.selector;
+              });
+              
+              if (proposedIndex !== -1) {
+                selectedIndex = proposedIndex;
+                selectionMethod = 'AI';
+              } else {
+                // Fallback if we can't find the element in the full array
+                selectedIndex = DecisionMaker.selectBestElementHeuristic(interactiveElements, Array.from(this.visitedUrls));
+                selectionMethod = 'heuristic (element not found)';
+              }
             }
 
             aiReasoning = recommendation.reasoning;

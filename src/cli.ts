@@ -40,7 +40,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { Planner } from './planner/Planner.js';
 import { Generator } from './generator.js';
-import { Healer } from './healer.js';
+import { Healer } from './healer/Healer.js';
 
 const program = new Command();
 
