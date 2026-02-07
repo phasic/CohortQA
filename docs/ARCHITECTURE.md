@@ -16,89 +16,90 @@ This document provides a comprehensive overview of the Cohort QA system architec
 
 ## High-Level Architecture
 
-```mermaid
-graph TB
-    subgraph Frontend["Frontend PWA (React + Vite)"]
-        PlannerPage["Planner Page"]
-        GeneratorPage["Generator Page"]
-        HealerPage["Healer Page"]
-        LogOutput["LogOutput Component<br/>(SSE)<br/>Real-time log streaming"]
-        
-        PlannerPage --> LogOutput
-        GeneratorPage --> LogOutput
-        HealerPage --> LogOutput
-    end
-    
-    subgraph APIServer["API Server (Express.js)"]
-        LogStreamer["Log Streamer<br/>(Server-Sent Events)<br/>- Intercepts console.log/error/warn/info<br/>- Streams logs to frontend<br/>- Manages concurrent streams"]
-        PlannerEndpoint["Planner Endpoint"]
-        GeneratorEndpoint["Generator Endpoint"]
-        HealerEndpoint["Healer Endpoint"]
-        
-        LogStreamer --> PlannerEndpoint
-        LogStreamer --> GeneratorEndpoint
-        LogStreamer --> HealerEndpoint
-    end
-    
-    subgraph CLI["CLI (cli.ts)"]
-        PlannerCLI["Planner"]
-        GeneratorCLI["Generator"]
-        HealerCLI["Healer"]
-        InteractiveMode["Interactive Mode"]
-    end
-    
-    subgraph AISystem["AI System"]
-        DecisionMaker["DecisionMaker<br/>(Planner)"]
-        TestCodeGenAI["TestCodeGenAI<br/>(Generator)"]
-        TestHealerAI["TestHealerAI<br/>(Healer)"]
-        PrefixGenerator["PrefixGenerator<br/>(TTS)"]
-        
-        subgraph ProviderFactory["AI Provider Factory"]
-            OpenAIClient["OpenAI Client"]
-            AnthropicClient["Anthropic Client"]
-            OllamaClient["Ollama Client"]
-        end
-        
-        DecisionMaker --> ProviderFactory
-        TestCodeGenAI --> ProviderFactory
-        TestHealerAI --> ProviderFactory
-        PrefixGenerator --> ProviderFactory
-        
-        ProviderFactory --> OpenAIClient
-        ProviderFactory --> AnthropicClient
-        ProviderFactory --> OllamaClient
-        
-        TTSProviders["TTS Providers<br/>(TTS)"]
-        GeneratorHeuristics["Heuristics<br/>(Generator)"]
-        HealerHeuristics["Heuristics<br/>(Healer)"]
-        
-        PrefixGenerator --> TTSProviders
-        TestCodeGenAI --> GeneratorHeuristics
-        TestHealerAI --> HealerHeuristics
-    end
-    
-    subgraph Config["Configuration System (config.yaml)"]
-        ConfigDetails["- AI Provider Selection<br/>- Model Selection<br/>- Voice Selection (TTS)<br/>- Planner Settings"]
-    end
-    
-    Frontend -->|"HTTP REST API + SSE"| APIServer
-    APIServer -->|"Calls"| CLI
-    CLI --> PlannerCLI
-    CLI --> GeneratorCLI
-    CLI --> HealerCLI
-    CLI --> InteractiveMode
-    
-    PlannerCLI --> DecisionMaker
-    GeneratorCLI --> TestCodeGenAI
-    HealerCLI --> TestHealerAI
-    
-    AISystem --> Config
-    
-    style Frontend fill:#e1f5ff
-    style APIServer fill:#fff4e1
-    style CLI fill:#e8f5e9
-    style AISystem fill:#f3e5f5
-    style Config fill:#fff9c4
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend PWA (React + Vite)                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │   Planner    │  │  Generator   │  │   Healer     │         │
+│  │    Page     │  │    Page      │  │    Page      │         │
+│  └──────┬──────┘  └──────┬───────┘  └──────┬───────┘         │
+│         │                 │                   │                 │
+│         │  ┌──────────────┴───────────────────┴──────────────┐  │
+│         │  │         LogOutput Component (SSE)             │  │
+│         │  │    Real-time log streaming from backend        │  │
+│         │  └───────────────────────────────────────────────┘  │
+│         │                                                      │
+└─────────┼──────────────────────────────────────────────────────┘
+          │ HTTP REST API + SSE
+          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    API Server (Express.js)                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              Log Streamer (Server-Sent Events)           │  │
+│  │  - Intercepts console.log/error/warn/info                │  │
+│  │  - Streams logs to connected frontend clients           │  │
+│  │  - Manages multiple concurrent streams                  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│         │                 │                   │                 │
+│         ▼                 ▼                   ▼                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
+│  │   Planner    │  │  Generator   │  │   Healer     │        │
+│  │   Endpoint   │  │   Endpoint   │  │   Endpoint   │        │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘        │
+└─────────┼─────────────────┼───────────────────┼─────────────────┘
+          │                 │                   │
+          ▼                 ▼                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLI (cli.ts)                            │
+│              Entry point for all commands                       │
+└────────────┬──────────────────────────────────────────────────┘
+             │
+             ├──────────────────┬──────────────────┬──────────────┐
+             │                  │                  │              │
+             ▼                  ▼                  ▼              ▼
+    ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+    │   Planner   │   │  Generator   │   │   Healer     │   │  Interactive │
+    │             │   │              │   │              │   │     Mode     │
+    └──────┬──────┘   └──────┬───────┘   └──────┬───────┘   └──────────────┘
+           │                 │                   │
+           │                 │                   │
+           ▼                 ▼                   ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │                    AI System                                │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+    │  │ DecisionMaker│  │TestCodeGenAI  │  │TestHealerAI  │    │
+    │  │  (Planner)   │  │ (Generator)   │  │  (Healer)    │    │
+    │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │
+    │         │                  │                  │            │
+    │  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐    │
+    │  │PrefixGenerator│  │              │  │              │    │
+    │  │   (TTS)      │  │              │  │              │    │
+    │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │
+    │         │                  │                  │            │
+    │         ▼                  ▼                  ▼            │
+    │  ┌────────────────────────────────────────────────────┐   │
+    │  │           AI Provider Factory                      │   │
+    │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐        │   │
+    │  │  │ OpenAI   │  │Anthropic │  │ Ollama   │        │   │
+    │  │  │ Client   │  │ Client   │  │ Client   │        │   │
+    │  │  └──────────┘  └──────────┘  └──────────┘        │   │
+    │  └────────────────────────────────────────────────────┘   │
+    │         │                  │                  │            │
+    │         ▼                  ▼                  ▼            │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+    │  │ TTS Providers│  │  Heuristics │  │  Heuristics  │    │
+    │  │  (TTS)       │  │ (Generator) │  │  (Healer)    │    │
+    │  └──────────────┘  └──────────────┘  └──────────────┘    │
+    └─────────────────────────────────────────────────────────────┘
+           │
+           ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │              Configuration System (config.yaml)             │
+    │  - AI Provider Selection (Planner & TTS)                    │
+    │  - Model Selection                                           │
+    │  - Voice Selection (TTS)                                     │
+    │  - Planner Settings                                          │
+    └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
