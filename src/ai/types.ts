@@ -32,5 +32,5 @@ export interface AIRecommendation {
   roast?: string; // Optional sassy roast of other elements
 }
 
-export type AIProvider = 'openai' | 'anthropic' | 'ollama';
+export type AIProvider = 'openai' | 'anthropic' | 'ollama' | 'heuristic';
 

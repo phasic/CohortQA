@@ -34,7 +34,7 @@ export class Healer {
 
     try {
       const testContent = await fs.readFile(testFile, 'utf-8');
-      const { fixed, appliedFixes } = TestCodeFixer.fix(testContent, failure);
+      const { fixed, appliedFixes } = await TestCodeFixer.fix(testContent, failure);
 
       if (fixed !== testContent) {
         await fs.writeFile(testFile, fixed, 'utf-8');

@@ -8,12 +8,53 @@ import { NavigationFixer } from './NavigationFixer.js';
 import { TimeoutFixer } from './TimeoutFixer.js';
 import { AssertionFixer } from './AssertionFixer.js';
 import { WaitTimeFixer } from './WaitTimeFixer.js';
+import { TestHealerAI } from '../ai/TestHealerAI.js';
 
 export class TestCodeFixer {
+  private static healerAI: TestHealerAI | null = null;
+
   /**
-   * Fixes test code based on failure type
+   * Gets or creates the AI healer instance
    */
-  static fix(testContent: string, failure: TestFailure): FixResult {
+  private static getHealerAI(): TestHealerAI {
+    if (!this.healerAI) {
+      this.healerAI = new TestHealerAI();
+    }
+    return this.healerAI;
+  }
+
+  /**
+   * Fixes test code based on failure type, using AI if available, otherwise heuristics
+   */
+  static async fix(testContent: string, failure: TestFailure): Promise<FixResult> {
+    // Try AI first if available
+    const healerAI = this.getHealerAI();
+    if (healerAI.isEnabled()) {
+      try {
+        const aiResult = await healerAI.heal({
+          testContent,
+          failure,
+          testName: failure.testName || 'Unknown test',
+          errorMessage: failure.error,
+          lineNumber: failure.line
+        });
+        
+        if (aiResult) {
+          return aiResult;
+        }
+      } catch (error: any) {
+        // Fall through to heuristics if AI fails
+      }
+    }
+    
+    // Fall back to heuristic-based fixing
+    return this.fixWithHeuristics(testContent, failure);
+  }
+
+  /**
+   * Fixes test code using heuristics (fallback)
+   */
+  private static fixWithHeuristics(testContent: string, failure: TestFailure): FixResult {
     let fixed = testContent;
     const allAppliedFixes: string[] = [];
     const error = failure.error.toLowerCase();

@@ -7,14 +7,24 @@
 ai:
   # Planner AI provider (for element selection)
   planner:
-    provider: openai  # Options: [ollama, openai, anthropic]
-    model: gpt-4o-mini    # Model name (e.g., mistral, gpt-4o-mini, claude-3-haiku-20240307)
+    provider: ollama  # Options: [heuristic, ollama, openai, anthropic]
+    model: mistral    # Model name (e.g., mistral, gpt-4o-mini, claude-3-haiku-20240307)
+  
+  # Generator AI provider (for test code generation)
+  generator:
+    provider: heuristic  # Options: [heuristic, ollama, openai, anthropic]
+    model: mistral    # Model name (e.g., mistral, gpt-4o-mini, claude-3-haiku-20240307)
+  
+  # Healer AI provider (for test healing)
+  healer:
+    provider: ollama  # Options: [heuristic, ollama, openai, anthropic]
+    model: mistral    # Model name (e.g., mistral, gpt-4o-mini, claude-3-haiku-20240307)
   
   # TTS provider (for text-to-speech)
   tts:
-    provider: openai   # Options: [openai, piper, macos]
-    model: tts-1      # Model name (for OpenAI: [tts-1, tts-1-hd])
-    voice: nova        # Voice name
+    provider: piper   # Options: [openai, piper, macos]
+    model: tts-1    # Model name (for OpenAI: [tts-1, tts-1-hd])
+    voice: amy        # Voice name
                       # For OpenAI: [alloy, echo, fable, onyx, nova, shimmer]
                       # For Piper: [amy, lessac, joe] or full path to .onnx file
                       # For macOS: [Samantha, Alex, Victoria, etc.]

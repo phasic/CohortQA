@@ -2,6 +2,8 @@ import { test as playwrightTest, expect } from '@playwright/test';
 import { chromium, Browser, Page } from '@playwright/test';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { TestCodeGenerator } from './generator/TestCodeGenerator.js';
+import chalk from 'chalk';
 
 export interface TestScenario {
   title: string;
@@ -13,11 +15,30 @@ export interface TestScenario {
 export class Generator {
   private browser: Browser | null = null;
   private page: Page | null = null;
+  private testCodeGenerator: TestCodeGenerator;
+
+  constructor() {
+    this.testCodeGenerator = new TestCodeGenerator();
+  }
 
   async initialize() {
     this.browser = await chromium.launch({ headless: false });
     const context = await this.browser.newContext();
     this.page = await context.newPage();
+  }
+
+  /**
+   * Checks if AI is enabled for test generation
+   */
+  isAIEnabled(): boolean {
+    return this.testCodeGenerator.isEnabled();
+  }
+
+  /**
+   * Gets the AI provider being used for test generation
+   */
+  getAIProvider(): string | null {
+    return this.testCodeGenerator.getProvider();
   }
 
   async parseMarkdown(markdownPath: string): Promise<{ title: string; scenarios: TestScenario[] }> {
@@ -101,8 +122,16 @@ export class Generator {
         seedPath = `tests/seed/${seedFileName}`;
       }
       
-      const testCode = await this.generateTestCode(scenario, baseUrl, markdownPath, seedPath, generatedDir);
-      await fs.writeFile(filePath, testCode, 'utf-8');
+      // Use AI generator with heuristics fallback
+      const result = await this.testCodeGenerator.generate({
+        scenario,
+        baseUrl,
+        specPath: markdownPath,
+        seedPath,
+        generatedDir
+      });
+      
+      await fs.writeFile(filePath, result.code, 'utf-8');
       generatedFiles.push(filePath);
     }
 
@@ -125,7 +154,11 @@ export class Generator {
       .substring(0, 50);
   }
 
-  private async generateTestCode(
+  /**
+   * Generates test code using heuristics (used as fallback by TestCodeGenerator)
+   * Made public so TestCodeGenerator can access it
+   */
+  async generateTestCode(
     scenario: TestScenario,
     baseUrl: string,
     specPath: string,

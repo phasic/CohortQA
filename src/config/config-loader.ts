@@ -5,7 +5,15 @@ import { load as loadYaml } from 'js-yaml';
 export interface Config {
   ai: {
     planner: {
-      provider: 'ollama' | 'openai' | 'anthropic';
+      provider: 'heuristic' | 'ollama' | 'openai' | 'anthropic';
+      model?: string;
+    };
+    generator: {
+      provider: 'heuristic' | 'ollama' | 'openai' | 'anthropic';
+      model?: string;
+    };
+    healer: {
+      provider: 'heuristic' | 'ollama' | 'openai' | 'anthropic';
       model?: string;
     };
     tts: {
@@ -84,6 +92,18 @@ export function loadConfig(): Config {
                   yamlConfig.ai?.planner?.provider || 'ollama',
         model: process.env.PLANNER_AI_MODEL || 
                yamlConfig.ai?.planner?.model || undefined,
+      },
+      generator: {
+        provider: (process.env.GENERATOR_AI_PROVIDER?.toLowerCase() as any) || 
+                  yamlConfig.ai?.generator?.provider || 'openai',
+        model: process.env.GENERATOR_AI_MODEL || 
+               yamlConfig.ai?.generator?.model || undefined,
+      },
+      healer: {
+        provider: (process.env.HEALER_AI_PROVIDER?.toLowerCase() as any) || 
+                  yamlConfig.ai?.healer?.provider || 'heuristic',
+        model: process.env.HEALER_AI_MODEL || 
+               yamlConfig.ai?.healer?.model || undefined,
       },
       tts: {
         provider: (process.env.TTS_PROVIDER?.toLowerCase() as any) || 

@@ -46,7 +46,10 @@ export class Planner {
     console.log(chalk.cyan(emptyLine));
 
     // AI Decision Making
-    if (aiProvider && aiModel) {
+    if (aiProvider === 'heuristic') {
+      const line = `  Decision Making: ${chalk.bold.yellow('Heuristics (AI disabled)')}`;
+      console.log(chalk.cyan(sideBorder) + line.padEnd(width - 3) + chalk.cyan(sideBorder));
+    } else if (aiProvider && aiModel) {
       const providerName = aiProvider === 'ollama' ? 'Ollama' : 
                           aiProvider === 'openai' ? 'OpenAI' : 
                           aiProvider === 'anthropic' ? 'Anthropic' : aiProvider;
@@ -91,11 +94,10 @@ export class Planner {
     this.decisionMaker = new DecisionMaker();
     this.useAI = useAI && this.decisionMaker.isEnabled();
     
-    // Get AI provider and model info
-    let aiProvider: string | null = null;
+    // Get AI provider and model info (always get provider, even if disabled)
+    let aiProvider: string | null = this.decisionMaker.getProvider();
     let aiModel: string | null = null;
-    if (this.useAI) {
-      aiProvider = this.decisionMaker.getProvider();
+    if (this.useAI && aiProvider !== 'heuristic') {
       aiModel = this.decisionMaker.getModel();
     }
     

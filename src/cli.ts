@@ -102,6 +102,18 @@ program
       const generator = new Generator();
       await generator.initialize();
       
+      // Log AI configuration
+      console.log(chalk.bold('\n🤖 Generator AI Configuration:'));
+      const provider = generator.getAIProvider();
+      if (provider === 'heuristic') {
+        console.log(chalk.yellow(`  Provider: heuristic (AI disabled)`));
+      } else if (generator.isAIEnabled()) {
+        console.log(chalk.cyan(`  Provider: ${provider}`));
+      } else {
+        console.log(chalk.yellow(`  Using heuristic generation (AI not available)`));
+      }
+      console.log('');
+      
       spinner.text = 'Generating Playwright tests...';
       const generatedFiles = await generator.generateTests(
         options.input,
@@ -134,6 +146,20 @@ program
     const spinner = ora('Initializing healer...').start();
     
     try {
+      // Log AI configuration
+      const { TestHealerAI } = await import('./healer/ai/TestHealerAI.js');
+      const healerAI = new TestHealerAI();
+      console.log(chalk.bold('\n🤖 Healer AI Configuration:'));
+      const provider = healerAI.getProvider();
+      if (provider === 'heuristic') {
+        console.log(chalk.yellow(`  Provider: heuristic (AI disabled)`));
+      } else if (healerAI.isEnabled()) {
+        console.log(chalk.cyan(`  Provider: ${provider}`));
+      } else {
+        console.log(chalk.yellow(`  Using heuristic healing (AI not available)`));
+      }
+      console.log('');
+      
       const healer = new Healer();
       await healer.initialize();
       
@@ -198,8 +224,20 @@ program
       
       // Step 2: Generate
       console.log(chalk.bold('\n⚙️  Step 2: 🎭 Generator'));
-      const genSpinner = ora('Generating Playwright tests...').start();
+      // Log AI configuration
       const generator = new Generator();
+      console.log(chalk.bold('🤖 Generator AI Configuration:'));
+      const provider = generator.getAIProvider();
+      if (provider === 'heuristic') {
+        console.log(chalk.yellow(`  Provider: heuristic (AI disabled)`));
+      } else if (generator.isAIEnabled()) {
+        console.log(chalk.cyan(`  Provider: ${provider}`));
+      } else {
+        console.log(chalk.yellow(`  Using heuristic generation (AI not available)`));
+      }
+      console.log('');
+      
+      const genSpinner = ora('Generating Playwright tests...').start();
       await generator.initialize();
       const generatedFiles = await generator.generateTests(
         options.spec,
@@ -216,6 +254,20 @@ program
       // Step 3: Heal (optional)
       if (!options.skipHeal) {
         console.log(chalk.bold('\n🔧 Step 3: 🎭 Healer'));
+        // Log AI configuration
+        const { TestHealerAI } = await import('./healer/ai/TestHealerAI.js');
+        const healerAI = new TestHealerAI();
+        console.log(chalk.bold('🤖 Healer AI Configuration:'));
+        const provider = healerAI.getProvider();
+        if (provider === 'heuristic') {
+          console.log(chalk.yellow(`  Provider: heuristic (AI disabled)`));
+        } else if (healerAI.isEnabled()) {
+          console.log(chalk.cyan(`  Provider: ${provider}`));
+        } else {
+          console.log(chalk.yellow(`  Using heuristic healing (AI not available)`));
+        }
+        console.log('');
+        
         const healSpinner = ora('Running and fixing tests...').start();
         const healer = new Healer();
         await healer.initialize();
@@ -470,6 +522,20 @@ program
         // Execute heal command
         const spinner = ora('Initializing healer...').start();
         try {
+          // Log AI configuration
+          const { TestHealerAI } = await import('./healer/ai/TestHealerAI.js');
+          const healerAI = new TestHealerAI();
+          console.log(chalk.bold('\n🤖 Healer AI Configuration:'));
+          const provider = healerAI.getProvider();
+          if (provider === 'heuristic') {
+            console.log(chalk.yellow(`  Provider: heuristic (AI disabled)`));
+          } else if (healerAI.isEnabled()) {
+            console.log(chalk.cyan(`  Provider: ${provider}`));
+          } else {
+            console.log(chalk.yellow(`  Using heuristic healing (AI not available)`));
+          }
+          console.log('');
+          
           const healer = new Healer();
           await healer.initialize();
           
@@ -591,8 +657,18 @@ program
           
           // Step 2: Generate
           console.log(chalk.bold('\n⚙️  Step 2: 🎭 Generator'));
-          const genSpinner = ora('Generating Playwright tests...').start();
+          // Log AI configuration
           const generator = new Generator();
+          console.log(chalk.bold('🤖 Generator AI Configuration:'));
+          if (generator.isAIEnabled()) {
+            const provider = generator.getAIProvider();
+            console.log(chalk.cyan(`  Provider: ${provider}`));
+          } else {
+            console.log(chalk.yellow(`  Using heuristic generation (AI not available)`));
+          }
+          console.log('');
+          
+          const genSpinner = ora('Generating Playwright tests...').start();
           await generator.initialize();
           const generatedFiles = await generator.generateTests(
             answers.spec,
@@ -609,6 +685,20 @@ program
           // Step 3: Heal (optional)
           if (!answers.skipHeal) {
             console.log(chalk.bold('\n🔧 Step 3: 🎭 Healer'));
+            // Log AI configuration
+            const { TestHealerAI } = await import('./healer/ai/TestHealerAI.js');
+            const healerAI = new TestHealerAI();
+            console.log(chalk.bold('🤖 Healer AI Configuration:'));
+            const provider = healerAI.getProvider();
+            if (provider === 'heuristic') {
+              console.log(chalk.yellow(`  Provider: heuristic (AI disabled)`));
+            } else if (healerAI.isEnabled()) {
+              console.log(chalk.cyan(`  Provider: ${provider}`));
+            } else {
+              console.log(chalk.yellow(`  Using heuristic healing (AI not available)`));
+            }
+            console.log('');
+            
             const healSpinner = ora('Running and fixing tests...').start();
             const healer = new Healer();
             await healer.initialize();

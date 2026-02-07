@@ -16,7 +16,10 @@ export class DecisionMaker {
     this.client = ProviderFactory.createClient(this.provider);
     this.enabled = this.client !== null;
 
-    if (this.enabled && this.provider === 'ollama') {
+    if (this.provider === 'heuristic') {
+      // Heuristic mode - AI is explicitly disabled
+      this.enabled = false;
+    } else if (this.enabled && this.provider === 'ollama') {
       console.log('🤖 Using Ollama (local, free) for AI decisions');
       // Note: We don't check if server is running here to avoid blocking
       // The actual call will fail gracefully if server is down
