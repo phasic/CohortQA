@@ -9,6 +9,7 @@ import { TimeoutFixer } from './TimeoutFixer.js';
 import { AssertionFixer } from './AssertionFixer.js';
 import { WaitTimeFixer } from './WaitTimeFixer.js';
 import { TestHealerAI } from '../ai/TestHealerAI.js';
+import * as fs from 'fs/promises';
 
 export class TestCodeFixer {
   private static healerAI: TestHealerAI | null = null;
@@ -26,7 +27,16 @@ export class TestCodeFixer {
   /**
    * Fixes test code based on failure type, using AI if available, otherwise heuristics
    */
-  static async fix(testContent: string, failure: TestFailure): Promise<FixResult> {
+  static async fix(testContent: string, failure: TestFailure, testFilePath?: string): Promise<FixResult> {
+    // Create backup before fixing
+    if (testFilePath) {
+      try {
+        const backupPath = testFilePath + '.backup';
+        await fs.writeFile(backupPath, testContent, 'utf-8');
+      } catch {
+        // Ignore backup errors
+      }
+    }
     // Try AI first if available
     const healerAI = this.getHealerAI();
     if (healerAI.isEnabled()) {

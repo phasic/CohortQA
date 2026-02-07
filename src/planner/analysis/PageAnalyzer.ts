@@ -9,6 +9,37 @@ export class PageAnalyzer {
    * Analyzes a page and returns structured information
    */
   static async analyzePage(page: Page): Promise<PageInfo> {
+    // Wait a bit for page to be ready
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+    await page.waitForTimeout(1000);
+    
+    // First verify we can evaluate the page
+    try {
+      const canEvaluate = await page.evaluate(() => {
+        return {
+          bodyExists: !!document.body,
+          readyState: document.readyState
+        };
+      });
+      
+      if (!canEvaluate.bodyExists) {
+        console.log(`   ⚠️  PageAnalyzer: Body does not exist yet`);
+        await page.waitForTimeout(2000);
+      }
+    } catch (err: any) {
+      console.log(`   ❌ PageAnalyzer: Cannot evaluate page - ${err.message}`);
+      // Return empty result
+      return {
+        title: '',
+        url: page.url(),
+        buttons: [],
+        inputs: [],
+        links: [],
+        forms: [],
+        headings: []
+      };
+    }
+    
     return await page.evaluate(() => {
       const buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]'))
         .map((el: Element) => {

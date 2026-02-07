@@ -7,6 +7,13 @@ export class AnsiCodeStripper {
    * Removes ANSI escape codes from text
    */
   static strip(text: string): string {
+    return this.stripAnsiCodes(text);
+  }
+
+  /**
+   * Removes ANSI escape codes from text (alias for strip)
+   */
+  static stripAnsiCodes(text: string): string {
     if (!text) return '';
     // Remove ANSI escape codes (colors, formatting, etc.)
     // Handle both \u001b and actual escape sequences

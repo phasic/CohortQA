@@ -91,7 +91,17 @@ export class InteractionHandler {
    */
   private static async clickLink(page: Page, element: InteractiveElement): Promise<boolean> {
     try {
-      const navigationPromise = page.waitForLoadState('domcontentloaded', { timeout: PLANNER_CONFIG.NAVIGATION_WAIT_TIMEOUT }).catch(() => {});
+      // For links, wait for navigation (either full page or hash change)
+      const navigationPromise = Promise.race([
+        page.waitForLoadState('domcontentloaded', { timeout: PLANNER_CONFIG.NAVIGATION_WAIT_TIMEOUT }).catch(() => {}),
+        page.waitForURL('**', { timeout: PLANNER_CONFIG.NAVIGATION_WAIT_TIMEOUT }).catch(() => {}),
+        // Also wait for hash changes (SPA routing)
+        page.waitForFunction(
+          (initialHash) => window.location.hash !== initialHash,
+          new URL(page.url()).hash,
+          { timeout: 2000 }
+        ).catch(() => {})
+      ]);
 
       if (element.text && element.text.trim().length > 0) {
         const link = page.getByRole('link', { name: element.text });
@@ -307,38 +317,100 @@ export class InteractionHandler {
     const urlBefore = page.url();
     await page.waitForTimeout(200);
 
+    console.log(`   🔍 Attempting to interact with: ${element.type} "${element.text || element.selector}"`);
+    if (element.isLink && element.href) {
+      console.log(`   🔗 Link href: ${element.href}`);
+    }
+
     let clickSucceeded = false;
 
     try {
       if (element.isLink && element.href) {
         clickSucceeded = await this.clickLink(page, element);
+        console.log(`   ${clickSucceeded ? '✅' : '❌'} Link click ${clickSucceeded ? 'succeeded' : 'failed'}`);
       } else if (element.type === 'button') {
         clickSucceeded = await this.clickButton(page, element);
+        console.log(`   ${clickSucceeded ? '✅' : '❌'} Button click ${clickSucceeded ? 'succeeded' : 'failed'}`);
       } else if (element.type === 'input') {
         clickSucceeded = await this.fillInput(page, element);
+        console.log(`   ${clickSucceeded ? '✅' : '❌'} Input fill ${clickSucceeded ? 'succeeded' : 'failed'}`);
       }
 
       if (clickSucceeded) {
+        // Wait longer for navigation, especially for SPAs
         await page.waitForTimeout(PLANNER_CONFIG.PAGE_SETTLE_TIMEOUT);
+        
+        // Also wait for network to be idle (for SPAs that use client-side routing)
+        try {
+          await page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
+        } catch {
+          // Ignore networkidle timeout
+        }
       } else {
         console.log(`   ❌ Click failed - element may be blocked or not clickable`);
         await page.waitForTimeout(200);
         return false;
       }
 
-      // Check if navigation occurred
+      // Check if navigation occurred (including hash changes for SPAs)
       const urlAfter = page.url();
       const normalizedBefore = UrlNormalizer.normalize(urlBefore);
       const normalizedAfter = UrlNormalizer.normalize(urlAfter);
 
-      if (normalizedAfter !== normalizedBefore) {
+      // Also check for hash changes (SPA routing)
+      let hashBefore = '';
+      let hashAfter = '';
+      try {
+        hashBefore = new URL(urlBefore).hash;
+        hashAfter = new URL(urlAfter).hash;
+      } catch {
+        // If URL parsing fails, try simple string extraction
+        hashBefore = urlBefore.includes('#') ? urlBefore.split('#')[1] : '';
+        hashAfter = urlAfter.includes('#') ? urlAfter.split('#')[1] : '';
+      }
+      const hashChanged = hashBefore !== hashAfter;
+
+      if (normalizedAfter !== normalizedBefore || hashChanged) {
+        if (hashChanged && normalizedAfter === normalizedBefore) {
+          console.log(`   ✅ Hash navigation detected: ${hashBefore || '(none)'} → ${hashAfter || '(none)'}`);
+        } else {
+          console.log(`   ✅ Navigation detected: ${urlBefore} → ${urlAfter}`);
+        }
         return true; // Navigation occurred
+      }
+
+      console.log(`   ⚠️  No URL change detected after click`);
+      console.log(`   🔍 Before: ${urlBefore}, After: ${urlAfter}`);
+      
+      // If it's a link with an href, try direct navigation as fallback
+      if (element.isLink && element.href && clickSucceeded) {
+        const href = element.href;
+        const currentUrl = new URL(page.url());
+        const targetUrl = new URL(href, page.url());
+        
+        // Only try direct navigation if it's a different path
+        if (targetUrl.pathname !== currentUrl.pathname || targetUrl.search !== currentUrl.search) {
+          console.log(`   🔄 Attempting direct navigation to: ${href}`);
+          try {
+            await page.goto(href, { waitUntil: 'domcontentloaded', timeout: 10000 });
+            await page.waitForTimeout(500);
+            const finalUrl = page.url();
+            const finalNormalized = UrlNormalizer.normalize(finalUrl);
+            if (finalNormalized !== normalizedBefore) {
+              console.log(`   ✅ Direct navigation succeeded: ${finalUrl}`);
+              return true;
+            }
+          } catch (navError: any) {
+            console.log(`   ❌ Direct navigation failed: ${navError.message}`);
+          }
+        }
       }
 
       // Close any modals that appeared
       await page.waitForTimeout(200);
       const dialog = page.locator('[role="dialog"], .modal, .dialog').first();
       if (await dialog.isVisible({ timeout: 500 }).catch(() => false)) {
+        console.log(`   🔄 Closing modal/dialog...`);
         const closeButton = dialog.locator('button[aria-label*="close" i], button:has-text("Close"), button:has-text("×")').first();
         if (await closeButton.isVisible({ timeout: 500 }).catch(() => false)) {
           await closeButton.click();
@@ -347,7 +419,8 @@ export class InteractionHandler {
       }
 
       return false; // No navigation
-    } catch {
+    } catch (error: any) {
+      console.log(`   ❌ Interaction error: ${error.message}`);
       return false;
     }
   }

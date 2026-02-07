@@ -34,7 +34,7 @@ export class Healer {
 
     try {
       const testContent = await fs.readFile(testFile, 'utf-8');
-      const { fixed, appliedFixes } = await TestCodeFixer.fix(testContent, failure);
+      const { fixed, appliedFixes } = await TestCodeFixer.fix(testContent, failure, testFile);
 
       if (fixed !== testContent) {
         await fs.writeFile(testFile, fixed, 'utf-8');
@@ -78,7 +78,7 @@ export class Healer {
         for (const fileToHeal of filesToTry) {
           console.log(`\n📋 Test: ${failure.testName || 'Unknown'}`);
           console.log(`   File: ${fileToHeal}${failure.line ? `:${failure.line}` : ''}`);
-          const cleanError = AnsiCodeStripper.strip(failure.error);
+          const cleanError = AnsiCodeStripper.stripAnsiCodes(failure.error);
           console.log(`   Error: ${cleanError.substring(0, 200)}${cleanError.length > 200 ? '...' : ''}`);
 
           const healResult = await this.healTest(fileToHeal, failure);
@@ -92,10 +92,10 @@ export class Healer {
           }
         }
 
-        if (filesToTry.length === 0) {
+        if (filesToTry.length === 0 || !fileHealed) {
           console.log(`\n⚠️  Skipping: ${failure.testName || 'Unknown'}`);
           console.log(`   File: ${failure.file || 'unknown'} (could not find test file)`);
-          const cleanError = AnsiCodeStripper.strip(failure.error);
+          const cleanError = AnsiCodeStripper.stripAnsiCodes(failure.error);
           console.log(`   Error: ${cleanError.substring(0, 200)}${cleanError.length > 200 ? '...' : ''}`);
         }
       }

@@ -4,11 +4,17 @@ A command-line interface for [Playwright Test Agents](https://playwright.dev/doc
 
 ## Overview
 
-This CLI provides easy access to Playwright's three core agents:
+Cohort QA provides easy access to Playwright's three core agents via both CLI and a standalone PWA frontend:
 
 1. **🎭 Planner**: Explores web applications and generates Markdown test plans
 2. **🎭 Generator**: Transforms Markdown plans into executable Playwright Test files
 3. **🎭 Healer**: Executes test suites and automatically repairs failing tests
+
+### Frontend PWA
+
+A standalone Progressive Web App (PWA) is available in the `frontend/` directory, providing a graphical interface for all three components with settings override capabilities.
+
+See [Frontend Setup](#frontend-setup) for details.
 
 ## Features
 
@@ -490,6 +496,45 @@ npm start -- plan -u https://example.com --ai --tts
 - **OpenAI TTS**: Most natural, requires API key, costs ~$0.015 per 1,000 characters
 - **Piper TTS**: Very natural, free, offline, requires installation
 - **macOS `say`**: Basic/robotic, free, built-in, no setup needed
+
+## Frontend Setup
+
+The frontend is a standalone PWA that provides a graphical interface for all three components.
+
+### Quick Start
+
+```bash
+# Install frontend dependencies
+cd frontend
+npm install
+
+# Start the API server (Terminal 1)
+cd ..
+npm run api
+
+# Start the frontend dev server (Terminal 2)
+cd frontend
+npm run dev
+```
+
+Then open http://localhost:3000 in your browser.
+
+### Features
+
+- **Planner Page**: Enter URL, configure navigations, ignored tags, and AI/TTS settings
+- **Generator Page**: View and edit test plans, generate Playwright tests
+- **Healer Page**: Browse test suites and run healing operations
+- **Settings Override**: Override global `config.yaml` settings per operation
+- **PWA**: Installable as a standalone app (works offline after first load)
+
+### Building for Production
+
+```bash
+cd frontend
+npm run build
+```
+
+The built files will be in `frontend/dist/` and can be served with any static file server.
 
 ## References
 

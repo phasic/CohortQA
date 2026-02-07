@@ -80,17 +80,18 @@ export class Planner {
   }
 
   async initialize(useAI: boolean = false, enableTTS: boolean = false) {
-    this.browser = await chromium.launch({ headless: false });
-    const context = await this.browser.newContext();
+    // Only launch browser if it doesn't exist
+    if (!this.browser) {
+      console.log('🔧 Initializing browser...');
+      this.browser = await chromium.launch({ 
+        headless: false,
+        args: ['--disable-blink-features=AutomationControlled'] // Make browser less detectable
+      });
+      console.log('✅ Browser launched');
+    }
     
-    // Set cookiesOptin cookie via JavaScript before any page loads
-    // This ensures the cookie is available before cookie consent popup logic runs
-    await context.addInitScript(() => {
-      // Set the cookie for the current domain
-      document.cookie = 'cookiesOptin=true; path=/; SameSite=Lax';
-    });
-    
-    this.page = await context.newPage();
+    // Note: We don't create a page here anymore - it will be created in explore()
+    // This allows explore() to create a fresh page for each exploration
     this.decisionMaker = new DecisionMaker();
     this.useAI = useAI && this.decisionMaker.isEnabled();
     
@@ -128,9 +129,55 @@ export class Planner {
     this.navigationManager = new NavigationManager(this.baseUrl, this.initialUrl);
     this.interactionTracker.clear();
 
-    if (!this.page) {
+    // Initialize browser if needed (but don't create page yet)
+    if (!this.browser) {
       await this.initialize(useAI, enableTTS);
-    } else if (useAI && !this.useAI) {
+    } else {
+      // Update AI/TTS settings if needed
+      if (useAI && !this.useAI) {
+        this.decisionMaker = new DecisionMaker();
+        this.useAI = this.decisionMaker.isEnabled();
+      } else if (enableTTS && !this.tts) {
+        this.tts = new TTS(true);
+      }
+    }
+    
+    // Always create a fresh context and page for each exploration
+    // Close existing page and context if they exist
+    if (this.page) {
+      try {
+        const oldContext = this.page.context();
+        await this.page.close();
+        await oldContext.close().catch(() => {}); // Close context too
+      } catch {
+        // Page/context might already be closed
+      }
+    }
+    
+    // Create a new context with cookie init script
+    if (!this.browser) {
+      throw new Error('Browser not initialized');
+    }
+    
+    const context = await this.browser.newContext({
+      viewport: { width: 1280, height: 720 }
+    });
+    
+    // Set cookiesOptin cookie via JavaScript before any page loads
+    await context.addInitScript(() => {
+      document.cookie = 'cookiesOptin=true; path=/; SameSite=Lax';
+    });
+    
+    // Create a new page
+    this.page = await context.newPage();
+    
+    // Navigate to about:blank first to ensure page is ready
+    await this.page.goto('about:blank', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await this.page.waitForTimeout(100);
+    
+    console.log('✅ Created new page for exploration');
+    
+    if (useAI && !this.useAI) {
       this.decisionMaker = new DecisionMaker();
       this.useAI = this.decisionMaker.isEnabled();
     } else if (enableTTS && !this.tts) {
@@ -143,8 +190,115 @@ export class Planner {
         throw new Error('Page not initialized');
       }
       
-      await this.page.goto(url, { waitUntil: 'domcontentloaded' });
-      await this.page.waitForTimeout(500);
+      // Ensure page is ready before navigation
+      await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+      
+      console.log(`🌐 Navigating to ${url}...`);
+      
+      // Navigate with better waiting
+      const response = await this.page.goto(url, { 
+        waitUntil: 'domcontentloaded', 
+        timeout: 30000 
+      });
+      
+      if (!response) {
+        throw new Error('Navigation failed - no response');
+      }
+      
+      console.log(`   📡 Response status: ${response.status()}`);
+      
+      // Wait for page to be fully interactive
+      console.log('⏳ Waiting for page to settle...');
+      try {
+        await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+      } catch {
+        // Ignore networkidle timeout
+      }
+      
+      // Wait for body to have content
+      try {
+        await this.page.waitForFunction(
+          () => document.body && document.body.children.length > 0,
+          { timeout: 10000 }
+        ).catch(() => {});
+      } catch {
+        // Ignore if body check fails
+      }
+      
+      await this.page.waitForTimeout(3000); // Give extra time for JS to render
+      console.log(`✅ Loaded page: ${this.page.url()}`);
+      
+      // Wait for JavaScript to render content - try waiting for specific elements or network idle
+      console.log('⏳ Waiting for JavaScript to render content...');
+      
+      // Try waiting for common interactive elements to appear
+      try {
+        await Promise.race([
+          this.page.waitForSelector('a[href]', { timeout: 10000 }).catch(() => {}),
+          this.page.waitForSelector('button', { timeout: 10000 }).catch(() => {}),
+          this.page.waitForSelector('[role="button"]', { timeout: 10000 }).catch(() => {}),
+          this.page.waitForSelector('[role="link"]', { timeout: 10000 }).catch(() => {}),
+          this.page.waitForTimeout(10000) // Max wait
+        ]);
+      } catch {
+        // Ignore
+      }
+      
+      // Wait for network to be completely idle
+      try {
+        await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+      } catch {
+        // Ignore
+      }
+      
+      // Additional wait for JavaScript frameworks
+      await this.page.waitForTimeout(2000);
+      
+      // Debug: Check page state - with error handling
+      let pageState: any = null;
+      try {
+        pageState = await this.page.evaluate(() => {
+          // Check for shadow DOM elements
+          const shadowElements: string[] = [];
+          const allElements = document.querySelectorAll('*');
+          allElements.forEach((el) => {
+            if (el.shadowRoot) {
+              shadowElements.push(el.tagName.toLowerCase());
+            }
+          });
+          
+          return {
+            bodyExists: !!document.body,
+            bodyChildren: document.body?.children.length || 0,
+            totalElements: document.querySelectorAll('*').length,
+            links: document.querySelectorAll('a[href]').length,
+            buttons: document.querySelectorAll('button, [role="button"]').length,
+            readyState: document.readyState,
+            hasIframes: document.querySelectorAll('iframe').length > 0,
+            title: document.title,
+            bodyText: document.body?.textContent?.substring(0, 100) || '',
+            shadowRoots: shadowElements.length,
+            shadowRootTags: shadowElements.slice(0, 5),
+            // Check for common web component patterns
+            customElements: Array.from(document.querySelectorAll('*')).filter(el => 
+              el.tagName.includes('-') || el.shadowRoot
+            ).map(el => el.tagName.toLowerCase()).slice(0, 10)
+          };
+        });
+        console.log(`   📊 Page state: ${pageState.bodyChildren} body children, ${pageState.totalElements} total elements, ${pageState.links} links, ${pageState.buttons} buttons`);
+        console.log(`   📄 Ready state: ${pageState.readyState}, Has iframes: ${pageState.hasIframes}`);
+        console.log(`   📝 Title: ${pageState.title}`);
+        console.log(`   📄 Body preview: ${pageState.bodyText}...`);
+        if (pageState.shadowRoots > 0) {
+          console.log(`   🔍 Found ${pageState.shadowRoots} shadow DOM elements: ${pageState.shadowRootTags.join(', ')}`);
+        }
+        if (pageState.customElements.length > 0) {
+          console.log(`   🧩 Found custom elements: ${pageState.customElements.join(', ')}`);
+        }
+      } catch (evalError: any) {
+        console.log(`   ❌ Failed to evaluate page state: ${evalError.message}`);
+        console.log(`   ⚠️  This might indicate the page is not accessible or blocked`);
+      }
       
       // Verify we're on the correct domain
       const currentOrigin = new URL(this.page!.url()).origin;
@@ -157,8 +311,29 @@ export class Planner {
       this.visitedUrls.add(normalizedInitial);
 
       // Analyze the initial page
+      console.log('📊 Analyzing initial page...');
       const initialPageInfo = await PageAnalyzer.analyzePage(this.page!);
       this.allPageInfo.push(initialPageInfo);
+      console.log(`✅ Found ${initialPageInfo.buttons.length} buttons, ${initialPageInfo.links.length} links, ${initialPageInfo.inputs.length} inputs`);
+      
+      // If no elements found, try to find them with a more permissive approach
+      if (initialPageInfo.buttons.length === 0 && initialPageInfo.links.length === 0 && initialPageInfo.inputs.length === 0) {
+        console.log('⚠️  No elements found with standard detection. Trying fallback detection...');
+        const fallbackElements = await this.getFallbackElements(this.page!);
+        console.log(`   Found ${fallbackElements.length} fallback elements`);
+        
+        if (fallbackElements.length === 0) {
+          console.log('❌ No interactive elements found on page. The page may still be loading or has no clickable elements.');
+          // Try waiting a bit more and checking again
+          await this.page.waitForTimeout(3000);
+          const retryPageInfo = await PageAnalyzer.analyzePage(this.page!);
+          console.log(`   Retry: Found ${retryPageInfo.buttons.length} buttons, ${retryPageInfo.links.length} links, ${retryPageInfo.inputs.length} inputs`);
+          if (retryPageInfo.buttons.length > 0 || retryPageInfo.links.length > 0 || retryPageInfo.inputs.length > 0) {
+            // Update with retry results
+            this.allPageInfo[0] = retryPageInfo;
+          }
+        }
+      }
 
       // Start interactive exploration
       let navigationCount = 0;
@@ -168,9 +343,13 @@ export class Planner {
       const maxConsecutiveFailures = PLANNER_CONFIG.MAX_CONSECUTIVE_FAILURES;
 
       // Keep clicking until we reach target navigations or hit max clicks
+      console.log(`\n🎯 Starting exploration loop (target: ${maxNavigations} navigations, max clicks: ${maxClicks})...\n`);
       while (navigationCount < maxNavigations && totalClicks < maxClicks) {
         const urlBefore = this.page!.url();
         const normalizedUrlBefore = UrlNormalizer.normalize(urlBefore);
+        
+        console.log(`\n[Click ${totalClicks + 1}/${maxClicks}] Current URL: ${urlBefore}`);
+        console.log(`   Navigations so far: ${navigationCount}/${maxNavigations}`);
         
         // Try to interact with the page (click buttons, fill inputs, click links)
         const navigated = await this.interactAndNavigate(this.page!);
@@ -180,32 +359,57 @@ export class Planner {
         // Wait for navigation to complete and page to settle
         await this.page!.waitForTimeout(1000);
         
+        // Also wait for network to be idle (for SPAs)
+        try {
+          await this.page!.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {});
+        } catch {
+          // Ignore networkidle timeout
+        }
+        
         // CRITICAL: Verify we're still on the same domain
         await this.navigationManager.ensureSameDomain(this.page!);
         
         const urlAfter = this.page!.url();
         const normalizedUrlAfter = UrlNormalizer.normalize(urlAfter);
         
+        // Also check for hash changes (SPA routing)
+        const hashBefore = new URL(urlBefore).hash;
+        const hashAfter = new URL(urlAfter).hash;
+        const hashChanged = hashBefore !== hashAfter;
+        
         // Check if we navigated to a new page (URL changed and not already visited)
-        if (normalizedUrlAfter !== normalizedUrlBefore) {
-          if (!this.visitedUrls.has(normalizedUrlAfter)) {
+        if (normalizedUrlAfter !== normalizedUrlBefore || hashChanged) {
+          // For hash changes, create a unique key that includes the hash
+          const urlKey = hashChanged && normalizedUrlAfter === normalizedUrlBefore
+            ? `${normalizedUrlAfter}#${hashAfter}`
+            : normalizedUrlAfter;
+          
+          if (!this.visitedUrls.has(urlKey)) {
             navigationCount++;
-            this.visitedUrls.add(normalizedUrlAfter);
+            this.visitedUrls.add(urlKey);
+            console.log(`   ✅ Navigated to new page! (${navigationCount}/${maxNavigations})`);
+            if (hashChanged && normalizedUrlAfter === normalizedUrlBefore) {
+              console.log(`   📍 Hash navigation: ${hashBefore || '(none)'} → ${hashAfter}`);
+            }
             
             // Analyze the new page
             const pageInfo = await PageAnalyzer.analyzePage(this.page!);
             this.allPageInfo.push(pageInfo);
+            console.log(`   📊 Page has ${pageInfo.buttons.length} buttons, ${pageInfo.links.length} links`);
             
             consecutiveFailures = 0;
             
             // Stop if we've reached the target
             if (navigationCount >= maxNavigations) {
+              console.log(`\n🎯 Reached target of ${maxNavigations} navigations!`);
               break;
             }
           } else {
+            console.log(`   ⚠️  Navigated to already visited page`);
             consecutiveFailures++;
           }
         } else {
+          console.log(`   ⚠️  No navigation (URL unchanged)`);
           consecutiveFailures++;
         }
         
@@ -267,8 +471,38 @@ export class Planner {
       // First, check for and handle cookie popups/modals
       await CookieHandler.handleCookiePopup(page);
       
+      // Wait a bit for page to be ready
+      await page.waitForTimeout(500);
+      
+      // Wait a bit for page to be ready before scanning
+      await page.waitForTimeout(500);
+      
       // Get ALL interactive elements on the current page (including shadow DOM)
+      console.log(`   🔍 Scanning for interactive elements...`);
       const interactiveElements = await ElementDetector.findInteractiveElements(page, this.baseUrl);
+      console.log(`   📋 Found ${interactiveElements.length} interactive elements`);
+      
+      // If no elements found, wait longer and try again
+      if (interactiveElements.length === 0) {
+        console.log(`   ⏳ No elements found, waiting longer for page to load...`);
+        await page.waitForTimeout(3000);
+        try {
+          await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+        } catch {
+          // Ignore
+        }
+        const retryElements = await ElementDetector.findInteractiveElements(page, this.baseUrl);
+        console.log(`   🔄 Retry found ${retryElements.length} elements`);
+        if (retryElements.length > 0) {
+          // Use the retry elements
+          const selectedElement = retryElements[0];
+          console.log(`   📍 Clicking: ${selectedElement.type} "${selectedElement.text || selectedElement.selector}"`);
+          return await InteractionHandler.interactWithElement(page, selectedElement);
+        }
+        // Still no elements - return false
+        console.log(`   ❌ Still no elements found after retry`);
+        return false;
+      }
 
       // Speak when elements are found (includes thinking message)
       if (this.tts) {
@@ -419,6 +653,10 @@ export class Planner {
       const currentUrl = UrlNormalizer.normalize(page.url());
       console.log(`\n📍 ${currentUrl}`);
       console.log(`   ${interactiveElements.length} elements available → Clicking: ${element.type} "${element.text || element.selector}"`);
+      if (element.isLink && element.href) {
+        console.log(`   🔗 Target URL: ${element.href}`);
+      }
+      console.log(`   Selection method: ${selectionMethod}`);
       
       // Speak the decision and action
       if (this.tts) {

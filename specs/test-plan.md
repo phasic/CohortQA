@@ -8,8 +8,8 @@ The Banking & Insurance for private individuals & business - ING Belgium applica
 **Pages Explored:**
 1. Banking & Insurance for private individuals & business - ING Belgium (https://www.ing.be/en/individuals)
 2. start to invest - ING Belgium (https://www.ing.be/en/individuals/investing/start-to-invest)
-3. Safe and easy online investing - ING Belgium (https://www.ing.be/en/individuals/investing/ing-self-invest)
-4. Investing by yourself - ING Belgium (https://www.ing.be/en/individuals/investing/frequently-asked-questions-ing-self-invest)
+3. Easy online investment plan from €10/month - ING Belgium (https://www.ing.be/en/individuals/investing/easy-invest)
+4. Investment instruments offered by ING - ING Belgium (https://www.ing.be/en/individuals/investing/investment-instruments)
 
 
 ## Test Scenarios
@@ -38,28 +38,28 @@ The Banking & Insurance for private individuals & business - ING Belgium applica
 - Page title is "start to invest - ING Belgium"
 - Key elements are visible
 
-### 3. Verify Safe and easy online investing - ING Belgium Loads Correctly
+### 3. Verify Easy online investment plan from €10/month - ING Belgium Loads Correctly
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/investing/ing-self-invest
+1. Navigate to https://www.ing.be/en/individuals/investing/easy-invest
 
 **Expected Results:**
 - Page loads without errors
-- Page title is "Safe and easy online investing - ING Belgium"
+- Page title is "Easy online investment plan from €10/month - ING Belgium"
 - Key elements are visible
 
-### 4. Verify Investing by yourself - ING Belgium Loads Correctly
+### 4. Verify Investment instruments offered by ING - ING Belgium Loads Correctly
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/investing/frequently-asked-questions-ing-self-invest
+1. Navigate to https://www.ing.be/en/individuals/investing/investment-instruments
 
 **Expected Results:**
 - Page loads without errors
-- Page title is "Investing by yourself - ING Belgium"
+- Page title is "Investment instruments offered by ING - ING Belgium"
 - Key elements are visible
 
 ### 5. Navigate from Banking & Insurance for private individuals & business - ING Belgium to start to invest - ING Belgium
@@ -78,35 +78,35 @@ The Banking & Insurance for private individuals & business - ING Belgium applica
 - URL changes to the target page
 - Target page loads successfully
 
-### 6. Navigate from start to invest - ING Belgium to Safe and easy online investing - ING Belgium
+### 6. Navigate from start to invest - ING Belgium to Easy online investment plan from €10/month - ING Belgium
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
 1. Navigate to https://www.ing.be/en/individuals/investing/start-to-invest
-2. Click on the "link" link that navigates to Safe and easy online investing - ING Belgium
+2. Click on the "link" link that navigates to Easy online investment plan from €10/month - ING Belgium
 3. Wait for navigation to complete
 
 **Expected Results:**
 - Link with text "link" is visible and clickable
 - Navigation completes without errors
-- Page title is "Safe and easy online investing - ING Belgium"
+- Page title is "Easy online investment plan from €10/month - ING Belgium"
 - URL changes to the target page
 - Target page loads successfully
 
-### 7. Navigate from Safe and easy online investing - ING Belgium to Investing by yourself - ING Belgium
+### 7. Navigate from Easy online investment plan from €10/month - ING Belgium to Investment instruments offered by ING - ING Belgium
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/investing/ing-self-invest
-2. Click on the "link" link that navigates to Investing by yourself - ING Belgium
+1. Navigate to https://www.ing.be/en/individuals/investing/easy-invest
+2. Click on the "link" link that navigates to Investment instruments offered by ING - ING Belgium
 3. Wait for navigation to complete
 
 **Expected Results:**
 - Link with text "link" is visible and clickable
 - Navigation completes without errors
-- Page title is "Investing by yourself - ING Belgium"
+- Page title is "Investment instruments offered by ING - ING Belgium"
 - URL changes to the target page
 - Target page loads successfully
 

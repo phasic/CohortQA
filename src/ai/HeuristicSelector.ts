@@ -39,20 +39,70 @@ export class HeuristicSelector {
       .map((el, idx) => ({ el, idx }))
       .filter(({ el }) => {
         if (!el.isLink || !el.href) return false;
-        const normalizedUrl = el.href.split('#')[0].replace(/\/$/, '');
-        return !visitedUrls.includes(normalizedUrl);
+        
+        // Skip JavaScript links and hash-only links (unless they're to different pages)
+        const href = el.href.trim();
+        if (href === '#' || href.startsWith('javascript:') || href === '') {
+          return false;
+        }
+        
+        // Normalize URL for comparison
+        try {
+          const urlObj = new URL(href, 'http://dummy.com'); // Use dummy base for relative URLs
+          const normalizedUrl = urlObj.pathname.replace(/\/$/, '');
+          
+          // Skip if it's just a hash change on the same page
+          if (normalizedUrl === '' || normalizedUrl === '/') {
+            return false;
+          }
+          
+          // Check if we've visited this path
+          return !visitedUrls.some(visited => {
+            try {
+              const visitedObj = new URL(visited, 'http://dummy.com');
+              return visitedObj.pathname.replace(/\/$/, '') === normalizedUrl;
+            } catch {
+              return visited.includes(normalizedUrl);
+            }
+          });
+        } catch {
+          // If URL parsing fails, use simple string comparison
+          const normalizedUrl = href.split('#')[0].replace(/\/$/, '');
+          return normalizedUrl !== '' && !visitedUrls.includes(normalizedUrl);
+        }
       });
 
     if (links.length === 0) {
       return null;
     }
 
-    // Prefer links with meaningful text
+    // Prefer links with meaningful text and actual navigation (not just hash)
     const meaningfulLinks = links.filter(
-      ({ el }) => el.text && el.text.trim().length > 0 && el.text.trim().length < 50
+      ({ el }) => {
+        if (!el.text || el.text.trim().length === 0 || el.text.trim().length > 50) {
+          return false;
+        }
+        // Prefer links that look like they navigate (not just anchors)
+        const href = el.href || '';
+        return !href.startsWith('#') || href.length > 1; // Allow hash if it's meaningful
+      }
     );
 
-    return meaningfulLinks.length > 0 ? meaningfulLinks[0].idx : links[0].idx;
+    if (meaningfulLinks.length > 0) {
+      // Prefer links that are likely to navigate to new pages
+      const navigationLinks = meaningfulLinks.filter(({ el }) => {
+        const href = el.href || '';
+        return !href.startsWith('#') && href.length > 1;
+      });
+      
+      if (navigationLinks.length > 0) {
+        return navigationLinks[0].idx;
+      }
+      
+      return meaningfulLinks[0].idx;
+    }
+
+    return links[0].idx;
   }
 
   /**
