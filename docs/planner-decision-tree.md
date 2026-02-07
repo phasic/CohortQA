@@ -8,212 +8,65 @@ The planner uses a multi-stage decision process to select elements, with AI-powe
 
 ## Decision Flow Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    START: Page Interaction                      │
-└────────────────────────────┬──────────────────────────────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Handle Cookie   │
-                    │ Popups          │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ ElementDetector │
-                    │ .findInteractive │
-                    │ Elements()       │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Filter Elements │
-                    │ - Ignored tags   │
-                    │ - Visibility     │
-                    │ - Interactivity  │
-                    │ - Shadow DOM     │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Elements Found? │
-                    └────┬────────┬───┘
-                         │        │
-                    YES  │        │  NO
-                         │        │
-                         │        ▼
-                         │   ┌─────────────┐
-                         │   │ Retry with  │
-                         │   │ longer wait │
-                         │   └──────┬──────┘
-                         │          │
-                         │          ▼
-                         │   ┌─────────────┐
-                         │   │ Still None? │
-                         │   └──────┬──────┘
-                         │          │
-                         │          ▼
-                         │   ┌─────────────┐
-                         │   │ Return      │
-                         │   │ false       │
-                         │   └─────────────┘
-                         │
-                         ▼
-                    ┌─────────────────┐
-                    │ TTS: Speak      │
-                    │ "X elements     │
-                    │  found"         │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ AI Enabled?     │
-                    └────┬────────┬───┘
-                         │        │
-                    YES  │        │  NO
-                         │        │
-                         │        ▼
-                         │   ┌─────────────┐
-                         │   │ Heuristic   │
-                         │   │ Selection   │
-                         │   └──────┬──────┘
-                         │          │
-                         │          ▼
-                         │   ┌─────────────┐
-                         │   │ Return      │
-                         │   │ Element     │
-                         │   └─────────────┘
-                         │
-                         ▼
-                    ┌─────────────────┐
-                    │ Random Subset  │
-                    │ Selection       │
-                    │ - Shuffle array │
-                    │ - Take first N  │
-                    │   (maxElements  │
-                    │    ToShowAI)    │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Build Page      │
-                    │ Context for AI  │
-                    │ - URL, Title    │
-                    │ - Headings      │
-                    │ - Elements      │
-                    │ - Visited URLs  │
-                    │ - Recent clicks │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ DecisionMaker    │
-                    │ .recommendBest   │
-                    │ Interaction()    │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ AI Recommendation│
-                    │ Received?        │
-                    └────┬────────┬───┘
-                         │        │
-                    YES  │        │  NO
-                         │        │
-                         │        ▼
-                         │   ┌─────────────┐
-                         │   │ Fallback   │
-                         │   │ to         │
-                         │   │ Heuristics │
-                         │   └──────┬──────┘
-                         │          │
-                         │          ▼
-                         │   ┌─────────────┐
-                         │   │ Return      │
-                         │   │ Element     │
-                         │   └─────────────┘
-                         │
-                         ▼
-                    ┌─────────────────┐
-                    │ Map AI Index    │
-                    │ to Full Array   │
-                    │ (AI only saw    │
-                    │  subset)        │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Check Guardrails │
-                    │ - Is "home"?     │
-                    │ - Recently       │
-                    │   clicked?       │
-                    │ - Visited URL?   │
-                    └────┬────────┬───┘
-                         │        │
-                    BLOCKED│        │  ALLOWED
-                         │        │
-                         │        ▼
-                         │   ┌─────────────┐
-                         │   │ Find in     │
-                         │   │ Full Array  │
-                         │   └──────┬──────┘
-                         │          │
-                         │          ▼
-                         │   ┌─────────────┐
-                         │   │ Return      │
-                         │   │ Element     │
-                         │   └─────────────┘
-                         │
-                         ▼
-                    ┌─────────────────┐
-                    │ Find Alternative │
-                    │ - Not blocked    │
-                    │ - Not "home"      │
-                    │ - Not visited    │
-                    └────┬────────┬───┘
-                         │        │
-                    FOUND│        │  NOT FOUND
-                         │        │
-                         │        ▼
-                         │   ┌─────────────┐
-                         │   │ Fallback to │
-                         │   │ Heuristics  │
-                         │   └──────┬──────┘
-                         │          │
-                         │          ▼
-                         │   ┌─────────────┐
-                         │   │ Return      │
-                         │   │ Element     │
-                         │   └─────────────┘
-                         │
-                         ▼
-                    ┌─────────────────┐
-                    │ Record          │
-                    │ Interaction     │
-                    │ (Interaction    │
-                    │  Tracker)       │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ TTS: Speak       │
-                    │ Element Name    │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Verify Element   │
-                    │ Exists           │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Interaction     │
-                    │ Handler         │
-                    │ .interactWith    │
-                    │ Element()       │
-                    └─────────────────┘
+```mermaid
+flowchart TD
+    Start([START: Page Interaction]) --> HandleCookie[Handle Cookie Popups]
+    HandleCookie --> ElementDetector[ElementDetector.findInteractiveElements]
+    ElementDetector --> FilterElements[Filter Elements<br/>- Ignored tags<br/>- Visibility<br/>- Interactivity<br/>- Shadow DOM]
+    FilterElements --> ElementsFound{Elements Found?}
+    
+    ElementsFound -->|NO| RetryWait[Retry with longer wait]
+    RetryWait --> StillNone{Still None?}
+    StillNone -->|YES| ReturnFalse[Return false]
+    StillNone -->|NO| FilterElements
+    
+    ElementsFound -->|YES| TTSSpeakFound[TTS: Speak<br/>'X elements found']
+    TTSSpeakFound --> AIEnabled{AI Enabled?}
+    
+    AIEnabled -->|NO| HeuristicSelection[Heuristic Selection]
+    HeuristicSelection --> ReturnElement1[Return Element]
+    
+    AIEnabled -->|YES| RandomSubset[Random Subset Selection<br/>- Shuffle array<br/>- Take first N<br/>maxElementsToShowAI]
+    RandomSubset --> BuildContext[Build Page Context for AI<br/>- URL, Title<br/>- Headings<br/>- Elements<br/>- Visited URLs<br/>- Recent clicks]
+    BuildContext --> DecisionMaker[DecisionMaker.recommendBestInteraction]
+    DecisionMaker --> AIReceived{AI Recommendation<br/>Received?}
+    
+    AIReceived -->|NO| FallbackHeuristics[Fallback to Heuristics]
+    FallbackHeuristics --> ReturnElement2[Return Element]
+    
+    AIReceived -->|YES| MapIndex[Map AI Index to Full Array<br/>AI only saw subset]
+    MapIndex --> CheckGuardrails[Check Guardrails<br/>- Is 'home'?<br/>- Recently clicked?<br/>- Visited URL?]
+    CheckGuardrails --> GuardrailResult{Result}
+    
+    GuardrailResult -->|ALLOWED| FindInArray[Find in Full Array]
+    FindInArray --> ReturnElement3[Return Element]
+    
+    GuardrailResult -->|BLOCKED| FindAlternative[Find Alternative<br/>- Not blocked<br/>- Not 'home'<br/>- Not visited]
+    FindAlternative --> AlternativeFound{Found?}
+    
+    AlternativeFound -->|YES| ReturnElement4[Return Element]
+    AlternativeFound -->|NO| FallbackHeuristics2[Fallback to Heuristics]
+    FallbackHeuristics2 --> ReturnElement5[Return Element]
+    
+    ReturnElement1 --> RecordInteraction[Record Interaction<br/>InteractionTracker]
+    ReturnElement2 --> RecordInteraction
+    ReturnElement3 --> RecordInteraction
+    ReturnElement4 --> RecordInteraction
+    ReturnElement5 --> RecordInteraction
+    
+    RecordInteraction --> TTSSpeakElement[TTS: Speak Element Name]
+    TTSSpeakElement --> VerifyElement[Verify Element Exists]
+    VerifyElement --> InteractionHandler[InteractionHandler.interactWithElement]
+    InteractionHandler --> End([END])
+    
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style AIEnabled fill:#FFE4B5
+    style AIReceived fill:#FFE4B5
+    style GuardrailResult fill:#FFE4B5
+    style AlternativeFound fill:#FFE4B5
+    style ElementsFound fill:#FFE4B5
+    style StillNone fill:#FFE4B5
 ```
 
 ## Detailed Decision Points
@@ -397,53 +250,81 @@ planner:
 
 ## Sequence Diagram
 
-```
-Planner.interactAndNavigate()
-    │
-    ├─> CookieHandler.handleCookiePopup()
-    │
-    ├─> ElementDetector.findInteractiveElements()
-    │   │
-    │   ├─> Wait for page ready
-    │   ├─> Wait for shadow DOM
-    │   ├─> Scan DOM (including shadow DOM)
-    │   ├─> Filter by ignored tags
-    │   ├─> Filter by visibility
-    │   └─> Return InteractiveElement[]
-    │
-    ├─> ElementSelector.selectElement()
-    │   │
-    │   ├─> [If AI enabled]
-    │   │   │
-    │   │   ├─> Shuffle & subset elements
-    │   │   ├─> Build PageContext
-    │   │   ├─> DecisionMaker.recommendBestInteraction()
-    │   │   │   │
-    │   │   │   └─> AI Provider (OpenAI/Anthropic/Ollama)
-    │   │   │
-    │   │   ├─> Check guardrails (home, recent, visited)
-    │   │   │
-    │   │   ├─> [If blocked]
-    │   │   │   └─> Find alternative OR fallback to heuristics
-    │   │   │
-    │   │   └─> Map AI index to full array
-    │   │
-    │   └─> [If AI disabled or failed]
-    │       │
-    │       └─> HeuristicSelector.selectBestElement()
-    │           │
-    │           ├─> Find unvisited link
-    │           ├─> Find action button
-    │           └─> Random selection
-    │
-    ├─> InteractionTracker.rememberInteraction()
-    │
-    ├─> TTS.speakAction() [if enabled]
-    │
-    └─> InteractionHandler.interactWithElement()
-        │
-        ├─> Verify element exists
-        └─> Click/fill element
+```mermaid
+sequenceDiagram
+    participant Planner
+    participant CookieHandler
+    participant ElementDetector
+    participant ElementSelector
+    participant DecisionMaker
+    participant AIProvider
+    participant HeuristicSelector
+    participant InteractionTracker
+    participant TTS
+    participant InteractionHandler
+    
+    Planner->>CookieHandler: handleCookiePopup()
+    CookieHandler-->>Planner: Cookie handled
+    
+    Planner->>ElementDetector: findInteractiveElements()
+    activate ElementDetector
+    ElementDetector->>ElementDetector: Wait for page ready
+    ElementDetector->>ElementDetector: Wait for shadow DOM
+    ElementDetector->>ElementDetector: Scan DOM (including shadow DOM)
+    ElementDetector->>ElementDetector: Filter by ignored tags
+    ElementDetector->>ElementDetector: Filter by visibility
+    ElementDetector-->>Planner: InteractiveElement[]
+    deactivate ElementDetector
+    
+    Planner->>ElementSelector: selectElement()
+    activate ElementSelector
+    
+    alt AI enabled
+        ElementSelector->>ElementSelector: Shuffle & subset elements
+        ElementSelector->>ElementSelector: Build PageContext
+        ElementSelector->>DecisionMaker: recommendBestInteraction()
+        activate DecisionMaker
+        DecisionMaker->>AIProvider: AI API call
+        activate AIProvider
+        AIProvider-->>DecisionMaker: Recommendation
+        deactivate AIProvider
+        DecisionMaker-->>ElementSelector: Recommendation
+        deactivate DecisionMaker
+        
+        ElementSelector->>ElementSelector: Check guardrails (home, recent, visited)
+        
+        alt Blocked
+            ElementSelector->>ElementSelector: Find alternative OR fallback to heuristics
+        end
+        
+        ElementSelector->>ElementSelector: Map AI index to full array
+    else AI disabled or failed
+        ElementSelector->>HeuristicSelector: selectBestElement()
+        activate HeuristicSelector
+        HeuristicSelector->>HeuristicSelector: Find unvisited link
+        HeuristicSelector->>HeuristicSelector: Find action button
+        HeuristicSelector->>HeuristicSelector: Random selection
+        HeuristicSelector-->>ElementSelector: Selected element
+        deactivate HeuristicSelector
+    end
+    
+    ElementSelector-->>Planner: Selected element
+    deactivate ElementSelector
+    
+    Planner->>InteractionTracker: rememberInteraction()
+    InteractionTracker-->>Planner: Interaction recorded
+    
+    opt TTS enabled
+        Planner->>TTS: speakAction()
+        TTS-->>Planner: Spoken
+    end
+    
+    Planner->>InteractionHandler: interactWithElement()
+    activate InteractionHandler
+    InteractionHandler->>InteractionHandler: Verify element exists
+    InteractionHandler->>InteractionHandler: Click/fill element
+    InteractionHandler-->>Planner: Interaction complete
+    deactivate InteractionHandler
 ```
 
 ## Key Design Decisions

@@ -16,90 +16,89 @@ This document provides a comprehensive overview of the Cohort QA system architec
 
 ## High-Level Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Frontend PWA (React + Vite)                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
-│  │   Planner    │  │  Generator   │  │   Healer     │         │
-│  │    Page     │  │    Page      │  │    Page      │         │
-│  └──────┬──────┘  └──────┬───────┘  └──────┬───────┘         │
-│         │                 │                   │                 │
-│         │  ┌──────────────┴───────────────────┴──────────────┐  │
-│         │  │         LogOutput Component (SSE)             │  │
-│         │  │    Real-time log streaming from backend        │  │
-│         │  └───────────────────────────────────────────────┘  │
-│         │                                                      │
-└─────────┼──────────────────────────────────────────────────────┘
-          │ HTTP REST API + SSE
-          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    API Server (Express.js)                      │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              Log Streamer (Server-Sent Events)           │  │
-│  │  - Intercepts console.log/error/warn/info                │  │
-│  │  - Streams logs to connected frontend clients           │  │
-│  │  - Manages multiple concurrent streams                  │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│         │                 │                   │                 │
-│         ▼                 ▼                   ▼                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
-│  │   Planner    │  │  Generator   │  │   Healer     │        │
-│  │   Endpoint   │  │   Endpoint   │  │   Endpoint   │        │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘        │
-└─────────┼─────────────────┼───────────────────┼─────────────────┘
-          │                 │                   │
-          ▼                 ▼                   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                         CLI (cli.ts)                            │
-│              Entry point for all commands                       │
-└────────────┬──────────────────────────────────────────────────┘
-             │
-             ├──────────────────┬──────────────────┬──────────────┐
-             │                  │                  │              │
-             ▼                  ▼                  ▼              ▼
-    ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-    │   Planner   │   │  Generator   │   │   Healer     │   │  Interactive │
-    │             │   │              │   │              │   │     Mode     │
-    └──────┬──────┘   └──────┬───────┘   └──────┬───────┘   └──────────────┘
-           │                 │                   │
-           │                 │                   │
-           ▼                 ▼                   ▼
-    ┌─────────────────────────────────────────────────────────────┐
-    │                    AI System                                │
-    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
-    │  │ DecisionMaker│  │TestCodeGenAI  │  │TestHealerAI  │    │
-    │  │  (Planner)   │  │ (Generator)   │  │  (Healer)    │    │
-    │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │
-    │         │                  │                  │            │
-    │  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐    │
-    │  │PrefixGenerator│  │              │  │              │    │
-    │  │   (TTS)      │  │              │  │              │    │
-    │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │
-    │         │                  │                  │            │
-    │         ▼                  ▼                  ▼            │
-    │  ┌────────────────────────────────────────────────────┐   │
-    │  │           AI Provider Factory                      │   │
-    │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐        │   │
-    │  │  │ OpenAI   │  │Anthropic │  │ Ollama   │        │   │
-    │  │  │ Client   │  │ Client   │  │ Client   │        │   │
-    │  │  └──────────┘  └──────────┘  └──────────┘        │   │
-    │  └────────────────────────────────────────────────────┘   │
-    │         │                  │                  │            │
-    │         ▼                  ▼                  ▼            │
-    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
-    │  │ TTS Providers│  │  Heuristics │  │  Heuristics  │    │
-    │  │  (TTS)       │  │ (Generator) │  │  (Healer)    │    │
-    │  └──────────────┘  └──────────────┘  └──────────────┘    │
-    └─────────────────────────────────────────────────────────────┘
-           │
-           ▼
-    ┌─────────────────────────────────────────────────────────────┐
-    │              Configuration System (config.yaml)             │
-    │  - AI Provider Selection (Planner & TTS)                    │
-    │  - Model Selection                                           │
-    │  - Voice Selection (TTS)                                     │
-    │  - Planner Settings                                          │
-    └─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Frontend["Frontend PWA (React + Vite)"]
+        PlannerPage["Planner Page"]
+        GeneratorPage["Generator Page"]
+        HealerPage["Healer Page"]
+        LogOutput["LogOutput Component<br/>(SSE)<br/>Real-time log streaming"]
+        
+        PlannerPage --> LogOutput
+        GeneratorPage --> LogOutput
+        HealerPage --> LogOutput
+    end
+    
+    subgraph APIServer["API Server (Express.js)"]
+        LogStreamer["Log Streamer<br/>(Server-Sent Events)<br/>- Intercepts console.log/error/warn/info<br/>- Streams logs to frontend<br/>- Manages concurrent streams"]
+        PlannerEndpoint["Planner Endpoint"]
+        GeneratorEndpoint["Generator Endpoint"]
+        HealerEndpoint["Healer Endpoint"]
+        
+        LogStreamer --> PlannerEndpoint
+        LogStreamer --> GeneratorEndpoint
+        LogStreamer --> HealerEndpoint
+    end
+    
+    subgraph CLI["CLI (cli.ts)"]
+        PlannerCLI["Planner"]
+        GeneratorCLI["Generator"]
+        HealerCLI["Healer"]
+        InteractiveMode["Interactive Mode"]
+    end
+    
+    subgraph AISystem["AI System"]
+        DecisionMaker["DecisionMaker<br/>(Planner)"]
+        TestCodeGenAI["TestCodeGenAI<br/>(Generator)"]
+        TestHealerAI["TestHealerAI<br/>(Healer)"]
+        PrefixGenerator["PrefixGenerator<br/>(TTS)"]
+        
+        subgraph ProviderFactory["AI Provider Factory"]
+            OpenAIClient["OpenAI Client"]
+            AnthropicClient["Anthropic Client"]
+            OllamaClient["Ollama Client"]
+        end
+        
+        DecisionMaker --> ProviderFactory
+        TestCodeGenAI --> ProviderFactory
+        TestHealerAI --> ProviderFactory
+        PrefixGenerator --> ProviderFactory
+        
+        ProviderFactory --> OpenAIClient
+        ProviderFactory --> AnthropicClient
+        ProviderFactory --> OllamaClient
+        
+        TTSProviders["TTS Providers<br/>(TTS)"]
+        GeneratorHeuristics["Heuristics<br/>(Generator)"]
+        HealerHeuristics["Heuristics<br/>(Healer)"]
+        
+        PrefixGenerator --> TTSProviders
+        TestCodeGenAI --> GeneratorHeuristics
+        TestHealerAI --> HealerHeuristics
+    end
+    
+    subgraph Config["Configuration System (config.yaml)"]
+        ConfigDetails["- AI Provider Selection<br/>- Model Selection<br/>- Voice Selection (TTS)<br/>- Planner Settings"]
+    end
+    
+    Frontend -->|"HTTP REST API + SSE"| APIServer
+    APIServer -->|"Calls"| CLI
+    CLI --> PlannerCLI
+    CLI --> GeneratorCLI
+    CLI --> HealerCLI
+    CLI --> InteractiveMode
+    
+    PlannerCLI --> DecisionMaker
+    GeneratorCLI --> TestCodeGenAI
+    HealerCLI --> TestHealerAI
+    
+    AISystem --> Config
+    
+    style Frontend fill:#e1f5ff
+    style APIServer fill:#fff4e1
+    style CLI fill:#e8f5e9
+    style AISystem fill:#f3e5f5
+    style Config fill:#fff9c4
 ```
 
 ---
@@ -938,56 +937,132 @@ tts:
 
 ## Module Dependencies
 
-```
-CLI
-├─ Planner
-│  ├─ DecisionMaker (AI)
-│  │  ├─ ProviderFactory
-│  │  │  ├─ OpenAIClient
-│  │  │  ├─ AnthropicClient
-│  │  │  └─ OllamaClient
-│  │  └─ HeuristicSelector (fallback)
-│  ├─ ElementDetector
-│  ├─ InteractionHandler
-│  ├─ NavigationManager
-│  ├─ PageAnalyzer
-│  ├─ TestPlanGenerator
-│  ├─ MarkdownExporter
-│  └─ TTS (optional)
-│     ├─ PrefixGenerator (AI)
-│     │  └─ Uses same AI providers as DecisionMaker
-│     ├─ OpenAIProvider
-│     ├─ PiperProvider
-│     └─ MacOSProvider
-├─ Generator
-│  ├─ TestCodeGenerator (AI)
-│  │  ├─ ProviderFactory
-│  │  │  ├─ OpenAIClient
-│  │  │  ├─ AnthropicClient
-│  │  │  └─ OllamaClient
-│  │  └─ Heuristic generation (fallback)
-│  └─ Generator.ts (orchestrator)
-└─ Healer
-   ├─ TestHealerAI (AI)
-   │  ├─ ProviderFactory
-   │  │  ├─ OpenAIClient
-   │  │  ├─ AnthropicClient
-   │  │  └─ OllamaClient
-   │  └─ Heuristic fixers (fallback)
-   ├─ TestCodeFixer (orchestrator)
-   ├─ SelectorFixer
-   ├─ NavigationFixer
-   ├─ TimeoutFixer
-   ├─ AssertionFixer
-   ├─ WaitTimeFixer
-   ├─ TestRunner
-   └─ TestFailureParser
-
-Config System
-├─ config-loader.ts
-│  └─ Reads config.yaml
-└─ ai-config.ts
-   └─ Wrapper for config-loader
+```mermaid
+graph TD
+    CLI["CLI"]
+    
+    subgraph Planner["Planner"]
+        DecisionMaker["DecisionMaker (AI)"]
+        ElementDetector["ElementDetector"]
+        InteractionHandler["InteractionHandler"]
+        NavigationManager["NavigationManager"]
+        PageAnalyzer["PageAnalyzer"]
+        TestPlanGenerator["TestPlanGenerator"]
+        MarkdownExporter["MarkdownExporter"]
+        
+        subgraph TTS["TTS (optional)"]
+            PrefixGenerator["PrefixGenerator (AI)"]
+            OpenAIProvider["OpenAIProvider"]
+            PiperProvider["PiperProvider"]
+            MacOSProvider["MacOSProvider"]
+        end
+        
+        subgraph DecisionMakerAI["DecisionMaker AI"]
+            ProviderFactory1["ProviderFactory"]
+            OpenAIClient1["OpenAIClient"]
+            AnthropicClient1["AnthropicClient"]
+            OllamaClient1["OllamaClient"]
+            HeuristicSelector["HeuristicSelector (fallback)"]
+            
+            ProviderFactory1 --> OpenAIClient1
+            ProviderFactory1 --> AnthropicClient1
+            ProviderFactory1 --> OllamaClient1
+            DecisionMaker --> ProviderFactory1
+            DecisionMaker --> HeuristicSelector
+        end
+        
+        PrefixGenerator --> ProviderFactory1
+        TTS --> PrefixGenerator
+        TTS --> OpenAIProvider
+        TTS --> PiperProvider
+        TTS --> MacOSProvider
+    end
+    
+    subgraph Generator["Generator"]
+        TestCodeGenerator["TestCodeGenerator (AI)"]
+        GeneratorOrchestrator["Generator.ts (orchestrator)"]
+        
+        subgraph TestCodeGenAI["TestCodeGenerator AI"]
+            ProviderFactory2["ProviderFactory"]
+            OpenAIClient2["OpenAIClient"]
+            AnthropicClient2["AnthropicClient"]
+            OllamaClient2["OllamaClient"]
+            HeuristicGen["Heuristic generation (fallback)"]
+            
+            ProviderFactory2 --> OpenAIClient2
+            ProviderFactory2 --> AnthropicClient2
+            ProviderFactory2 --> OllamaClient2
+            TestCodeGenerator --> ProviderFactory2
+            TestCodeGenerator --> HeuristicGen
+        end
+    end
+    
+    subgraph Healer["Healer"]
+        TestHealerAI["TestHealerAI (AI)"]
+        TestCodeFixer["TestCodeFixer (orchestrator)"]
+        SelectorFixer["SelectorFixer"]
+        NavigationFixer["NavigationFixer"]
+        TimeoutFixer["TimeoutFixer"]
+        AssertionFixer["AssertionFixer"]
+        WaitTimeFixer["WaitTimeFixer"]
+        TestRunner["TestRunner"]
+        TestFailureParser["TestFailureParser"]
+        
+        subgraph TestHealerAISys["TestHealerAI"]
+            ProviderFactory3["ProviderFactory"]
+            OpenAIClient3["OpenAIClient"]
+            AnthropicClient3["AnthropicClient"]
+            OllamaClient3["OllamaClient"]
+            HeuristicFixers["Heuristic fixers (fallback)"]
+            
+            ProviderFactory3 --> OpenAIClient3
+            ProviderFactory3 --> AnthropicClient3
+            ProviderFactory3 --> OllamaClient3
+            TestHealerAI --> ProviderFactory3
+            TestHealerAI --> HeuristicFixers
+        end
+    end
+    
+    subgraph ConfigSystem["Config System"]
+        ConfigLoader["config-loader.ts"]
+        AIConfig["ai-config.ts"]
+        ConfigYAML["Reads config.yaml"]
+        
+        ConfigLoader --> ConfigYAML
+        AIConfig --> ConfigLoader
+    end
+    
+    CLI --> Planner
+    CLI --> Generator
+    CLI --> Healer
+    
+    Planner --> DecisionMaker
+    Planner --> ElementDetector
+    Planner --> InteractionHandler
+    Planner --> NavigationManager
+    Planner --> PageAnalyzer
+    Planner --> TestPlanGenerator
+    Planner --> MarkdownExporter
+    Planner --> TTS
+    
+    Generator --> TestCodeGenerator
+    Generator --> GeneratorOrchestrator
+    
+    Healer --> TestHealerAI
+    Healer --> TestCodeFixer
+    Healer --> SelectorFixer
+    Healer --> NavigationFixer
+    Healer --> TimeoutFixer
+    Healer --> AssertionFixer
+    Healer --> WaitTimeFixer
+    Healer --> TestRunner
+    Healer --> TestFailureParser
+    
+    style CLI fill:#e1f5ff
+    style Planner fill:#fff4e1
+    style Generator fill:#e8f5e9
+    style Healer fill:#f3e5f5
+    style ConfigSystem fill:#fff9c4
 ```
 
 ---
