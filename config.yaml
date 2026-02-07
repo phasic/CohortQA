@@ -42,7 +42,6 @@ planner:
   # Tags to ignore when detecting interactive elements
   ignoredTags:
     - header
-    - nav
     - aside
     - footer
     - dbs-top-bar

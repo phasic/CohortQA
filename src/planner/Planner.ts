@@ -28,25 +28,29 @@ export class Planner {
   private allPageInfo: PageInfo[] = [];
   private baseUrl: string = '';
   private initialUrl: string = '';
+  private abortSignal: AbortSignal | null = null;
   private decisionMaker: DecisionMaker = new DecisionMaker();
   private useAI: boolean = false;
   private currentMaxNavigations: number = 3;
   private interactionTracker: InteractionTracker = new InteractionTracker();
   private navigationManager!: NavigationManager;
   private tts: TTS | null = null;
+  private headless: boolean = false;
 
   /**
    * Initializes the browser and AI/TTS components
    */
-  async initialize(useAI: boolean = false, enableTTS: boolean = false): Promise<void> {
+  async initialize(useAI: boolean = false, enableTTS: boolean = false, headless: boolean = false): Promise<void> {
+    this.headless = headless;
+    
     // Only launch browser if it doesn't exist
     if (!this.browser) {
-      console.log('🔧 Initializing browser...');
+      console.log(`🔧 Initializing browser... (${headless ? 'headless' : 'headed'})`);
       this.browser = await chromium.launch({
-        headless: false,
+        headless: headless,
         args: ['--disable-blink-features=AutomationControlled'], // Make browser less detectable
       });
-      console.log('✅ Browser launched');
+      console.log(`✅ Browser launched (${headless ? 'headless' : 'headed'})`);
     }
 
     // Initialize decision maker
@@ -81,13 +85,16 @@ export class Planner {
     seedTestPath?: string,
     maxNavigations: number = 3,
     useAI: boolean = false,
-    enableTTS: boolean = false
+    enableTTS: boolean = false,
+    headless: boolean = false,
+    abortSignal?: AbortSignal
   ): Promise<TestPlan> {
+    this.abortSignal = abortSignal || null;
     // Initialize exploration state
     this.initializeExplorationState(url, maxNavigations);
 
     // Ensure browser is initialized
-    await this.ensureBrowserInitialized(useAI, enableTTS);
+    await this.ensureBrowserInitialized(useAI, enableTTS, headless);
 
     // Create fresh page context for this exploration
     await this.createFreshPageContext();
@@ -126,9 +133,9 @@ export class Planner {
   /**
    * Ensures browser is initialized and updates AI/TTS settings if needed
    */
-  private async ensureBrowserInitialized(useAI: boolean, enableTTS: boolean): Promise<void> {
+  private async ensureBrowserInitialized(useAI: boolean, enableTTS: boolean, headless: boolean = false): Promise<void> {
     if (!this.browser) {
-      await this.initialize(useAI, enableTTS);
+      await this.initialize(useAI, enableTTS, headless);
     } else {
       // Update AI/TTS settings if needed
       if (useAI && !this.useAI) {
@@ -136,6 +143,12 @@ export class Planner {
         this.useAI = this.decisionMaker.isEnabled();
       } else if (enableTTS && !this.tts) {
         this.tts = new TTS(true);
+      }
+      // Update headless setting if changed
+      if (headless !== this.headless) {
+        this.headless = headless;
+        // Note: Can't change headless mode of existing browser, would need to restart
+        console.log(chalk.yellow(`⚠️  Headless setting changed to ${headless}, but browser already launched. Restart planner to apply.`));
       }
     }
   }
@@ -270,6 +283,12 @@ export class Planner {
     console.log(`\n🎯 Starting exploration loop (target: ${maxNavigations} navigations, max clicks: ${maxClicks})...\n`);
 
     while (navigationCount < maxNavigations && totalClicks < maxClicks) {
+      // Check if operation was cancelled
+      if (this.abortSignal?.aborted) {
+        console.log(`\n⏹️  Exploration cancelled by user`);
+        throw new Error('Exploration cancelled');
+      }
+
       const urlBefore = this.page.url();
       const normalizedUrlBefore = UrlNormalizer.normalize(urlBefore);
 
@@ -281,8 +300,20 @@ export class Planner {
 
       totalClicks++;
 
+      // Check if operation was cancelled before waiting
+      if (this.abortSignal?.aborted) {
+        console.log(`\n⏹️  Exploration cancelled by user`);
+        throw new Error('Exploration cancelled');
+      }
+
       // Wait for navigation to complete
       await PageLoader.waitForNavigation(this.page);
+
+      // Check again after navigation
+      if (this.abortSignal?.aborted) {
+        console.log(`\n⏹️  Exploration cancelled by user`);
+        throw new Error('Exploration cancelled');
+      }
 
       // Verify we're still on the same domain
       await this.navigationManager.ensureSameDomain(this.page);
@@ -401,9 +432,20 @@ export class Planner {
    * Interacts with the page and attempts navigation
    */
   private async interactAndNavigate(page: Page): Promise<boolean> {
+    // Check if operation was cancelled
+    if (this.abortSignal?.aborted) {
+      throw new Error('Exploration cancelled');
+    }
+
     try {
       // Handle cookie popups
       await CookieHandler.handleCookiePopup(page);
+      
+      // Check again after cookie handling
+      if (this.abortSignal?.aborted) {
+        throw new Error('Exploration cancelled');
+      }
+      
       await page.waitForTimeout(500);
 
       // Find interactive elements

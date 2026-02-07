@@ -8,7 +8,7 @@ import { PLANNER_CONFIG } from '../config.js';
 export class ElementDetector {
   /**
    * Finds all interactive elements on a page (buttons, links, inputs)
-   * Excludes elements in configured ignored tags (header, nav, aside, footer, dbs-top-bar by default)
+   * Excludes elements in configured ignored tags (header, aside, footer, dbs-top-bar by default)
    */
   static async findInteractiveElements(page: Page, baseOrigin: string): Promise<InteractiveElement[]> {
     const ignoredTags = PLANNER_CONFIG.IGNORED_TAGS.join(', ');
@@ -302,8 +302,8 @@ export class ElementDetector {
           .forEach((el: Element, index: number) => {
             const anchor = el as HTMLAnchorElement;
 
-            // Skip elements inside header, nav, aside (sidebar), footer, or dbs-top-bar tags
-            const parent = anchor.closest('header, nav, aside, footer, dbs-top-bar');
+            // Skip elements inside header, aside (sidebar), footer, or dbs-top-bar tags
+            const parent = anchor.closest('header, aside, footer, dbs-top-bar');
             if (parent !== null) {
               return;
             }
@@ -633,7 +633,7 @@ export class ElementDetector {
       });
       console.log(`   📊 Page state: ${debugInfo.totalLinks} links, ${debugInfo.totalButtons} buttons, ${debugInfo.totalInputs} inputs in DOM`);
       console.log(`   📄 Ready state: ${debugInfo.readyState}`);
-      console.log(`   🚫 Ignored tags: header=${debugInfo.ignoredTagsCount.header}, nav=${debugInfo.ignoredTagsCount.nav}, aside=${debugInfo.ignoredTagsCount.aside}, footer=${debugInfo.ignoredTagsCount.footer}, dbs-top-bar=${debugInfo.ignoredTagsCount.dbsTopBar}`);
+      console.log(`   🚫 Ignored tags: header=${debugInfo.ignoredTagsCount.header}, aside=${debugInfo.ignoredTagsCount.aside}, footer=${debugInfo.ignoredTagsCount.footer}, dbs-top-bar=${debugInfo.ignoredTagsCount.dbsTopBar}`);
       console.log(`   📝 Body preview: ${debugInfo.bodyText.substring(0, 100)}...`);
     }
 

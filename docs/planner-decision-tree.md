@@ -229,7 +229,7 @@ The planner uses a multi-stage decision process to select elements, with AI-powe
 4. Wait for interactive elements to appear
 5. Scan DOM (including shadow DOM traversal)
 6. Filter elements:
-   - **Exclude elements in ignored tags:** `<header>`, `<nav>`, `<aside>`, `<footer>`, `dbs-top-bar` (configurable)
+   - **Exclude elements in ignored tags:** `<header>`, `<aside>`, `<footer>`, `dbs-top-bar` (configurable)
    - **Check visibility:** Must be visible (not `display: none`, `visibility: hidden`, opacity > 0)
    - **Check interactivity:** Must be clickable (buttons, links, inputs with proper roles)
    - **Exclude destructive actions:** Skip buttons with "delete" + "remove" in text
@@ -379,10 +379,10 @@ planner:
   maxElementsToShowAI: 10        # Number of elements to show AI
   ignoredTags:                   # Tags to ignore during detection
     - header
-    - nav
     - aside
     - footer
     - dbs-top-bar
+    # Note: 'nav' was removed to allow navigation menu interactions
   recentInteractionHistorySize: 20 # How many recent clicks to remember
 ```
 

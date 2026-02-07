@@ -38,9 +38,15 @@ export class TTS {
     this.providerInfo = await ProviderDetector.detectProvider();
     this.provider = this.providerInfo.provider;
 
+    // Get voice from environment variable (set by frontend) or config
+    const voice = process.env.TTS_VOICE || undefined;
+    
+    // Debug: Log what provider and voice we're using
+    console.log(`🔊 TTS Provider: ${this.provider}${voice ? `, Voice: ${voice}` : ''}`);
+
     // Initialize provider-specific implementations
     if (this.provider === 'openai' && this.providerInfo.openaiApiKey) {
-      this.openaiProvider = new OpenAIProvider(this.providerInfo.openaiApiKey);
+      this.openaiProvider = new OpenAIProvider(this.providerInfo.openaiApiKey, voice);
     } else if (this.provider === 'piper' && this.providerInfo.piperPath) {
       this.piperProvider = new PiperProvider(
         this.providerInfo.piperPath,
@@ -52,7 +58,11 @@ export class TTS {
         console.log(`🔊 Piper TTS detected at: ${this.providerInfo.piperPath} (model: ${this.providerInfo.piperModelPath})`);
       }
     } else {
-      this.macosProvider = new MacOSProvider();
+      // macOS provider - use voice from env var if set
+      this.macosProvider = new MacOSProvider(voice);
+      if (voice) {
+        console.log(`🔊 Using macOS voice: ${voice}`);
+      }
     }
   }
 
@@ -248,16 +258,19 @@ export class TTS {
       await this.detectAndInitializeProvider();
     }
 
+    // Get voice from environment variable (set by frontend) or config
+    const voice = process.env.TTS_VOICE || undefined;
+    
     // Ensure providers are initialized
     if (this.provider === 'openai' && !this.openaiProvider && this.providerInfo?.openaiApiKey) {
-      this.openaiProvider = new OpenAIProvider(this.providerInfo.openaiApiKey);
+      this.openaiProvider = new OpenAIProvider(this.providerInfo.openaiApiKey, voice);
     } else if (this.provider === 'piper' && !this.piperProvider && this.providerInfo?.piperPath) {
       this.piperProvider = new PiperProvider(
         this.providerInfo.piperPath,
         this.providerInfo.piperModelPath || null
       );
     } else if (this.provider === 'macos' && !this.macosProvider) {
-      this.macosProvider = new MacOSProvider();
+      this.macosProvider = new MacOSProvider(voice);
     }
 
     const info: { provider: TTSProvider; model?: string; voice?: string } = {

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import SettingsPanel from '../components/SettingsPanel';
-import { Wrench, Play, FolderOpen } from 'lucide-react';
+import LogOutput from '../components/LogOutput';
+import { Wrench, Play, FolderOpen, Square } from 'lucide-react';
 
 interface TestSuite {
   name: string;
@@ -20,6 +21,17 @@ export default function HealerPage() {
   const [selectedFile, setSelectedFile] = useState<any>(null);
   const [fileDiffs, setFileDiffs] = useState<Map<string, { original: string; modified: string }>>(new Map());
   const abortControllerRef = useRef<AbortController | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
   
   // Settings overrides - separate for each component
   const [settings, setSettings] = useState({
@@ -67,14 +79,41 @@ export default function HealerPage() {
     setLoading(true);
     setError(null);
     setResult(null);
-    setLogs(['🔧 Starting test healing...', `📁 Test suite: ${selectedSuite}`]);
+    setLogs([]);
     setFileDiffs(new Map());
+
+    // Generate unique stream ID
+    const streamId = `healer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Connect to SSE log stream (use same base as API service)
+    const eventSource = new EventSource(
+      `/api/logs/stream?streamId=${streamId}&operation=healer`
+    );
+
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.message) {
+          setLogs(prev => [...prev, data.message]);
+        }
+      } catch (err) {
+        console.error('Failed to parse SSE message:', err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('SSE error:', err);
+      eventSource.close();
+    };
 
     abortControllerRef.current = new AbortController();
 
     try {
       const response = await api.post('/healer/run', {
         testSuite: selectedSuite,
+        streamId,
         settings: {
           useAI: settings.healer.useAI,
           aiProvider: settings.healer.aiProvider,
@@ -96,7 +135,6 @@ export default function HealerPage() {
         }
       }
 
-      setLogs(prev => [...prev, `✅ ${response.data.message || 'Healing completed!'}`]);
       setResult(response.data.message || 'Healing completed!');
     } catch (err: any) {
       if (err.name === 'CanceledError' || err.message === 'canceled') {
@@ -109,6 +147,10 @@ export default function HealerPage() {
     } finally {
       setLoading(false);
       abortControllerRef.current = null;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     }
   };
 
@@ -117,6 +159,10 @@ export default function HealerPage() {
       abortControllerRef.current.abort();
       setLoading(false);
       setLogs(prev => [...prev, '⏹️ Stopping healing...']);
+    }
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
   };
 
@@ -235,11 +281,6 @@ export default function HealerPage() {
                 <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
               </div>
             )}
-
-            {/* Log Output */}
-            <div className="mt-6">
-              <LogOutput logs={logs} title="Healer Logs" />
-            </div>
           </div>
         </div>
 
@@ -291,13 +332,16 @@ export default function HealerPage() {
             </div>
           </div>
         )}
-      </div>
-    </div>
 
         {/* Settings Panel */}
         <div className="lg:col-span-1">
           <SettingsPanel settings={settings} onChange={setSettings} component="healer" />
         </div>
+      </div>
+
+      {/* Log Output - Full width below grid, collapsed by default */}
+      <div className="mt-6 w-full">
+        <LogOutput logs={logs} title="Healer Logs" />
       </div>
     </div>
   );

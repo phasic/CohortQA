@@ -11,9 +11,21 @@ import { Planner } from '../planner/Planner.js';
 import { Generator } from '../generator.js';
 import { Healer } from '../healer/Healer.js';
 import { loadConfig } from '../config/config-loader.js';
+import { logStreamer } from './log-streamer.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Store active operations and their abort controllers
+interface ActiveOperation {
+  abortController: AbortController;
+  planner?: Planner;
+  generator?: Generator;
+  healer?: Healer;
+  streamId?: string;
+}
+
+const activeOperations = new Map<string, ActiveOperation>();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -44,13 +56,135 @@ function mergeSettings(settings: any) {
   };
 }
 
+// Log streaming endpoint (Server-Sent Events)
+app.get('/api/logs/stream', (req, res) => {
+  const streamId = req.query.streamId as string;
+  const operation = (req.query.operation as string) || 'operation';
+
+  if (!streamId) {
+    return res.status(400).json({ error: 'streamId is required' });
+  }
+
+  logStreamer.startStream(streamId, res, operation);
+});
+
+// Stop operation endpoint
+app.post('/api/planner/stop', async (req, res) => {
+  const { streamId } = req.body;
+  
+  if (!streamId) {
+    return res.status(400).json({ error: 'streamId is required' });
+  }
+  
+  const operation = activeOperations.get(streamId);
+  if (operation) {
+    console.log(`⏹️  Stopping planner operation: ${streamId}`);
+    operation.abortController.abort();
+    
+    // Cleanup
+    if (operation.planner) {
+      try {
+        await operation.planner.cleanup();
+      } catch (err) {
+        console.error('Error during planner cleanup:', err);
+      }
+    }
+    
+    activeOperations.delete(streamId);
+    res.json({ success: true, message: 'Planner stopped' });
+  } else {
+    res.status(404).json({ error: 'Operation not found' });
+  }
+});
+
 // Planner endpoints
 app.post('/api/planner/run', async (req, res) => {
+  const streamId = req.body.streamId as string | undefined;
+  let logInterceptorEnabled = false;
+  let planner: Planner | null = null;
+
+  // Create abort controller for this request
+  const abortController = new AbortController();
+  
+  // Store the operation so it can be stopped via the stop endpoint
+  if (streamId) {
+    activeOperations.set(streamId, {
+      abortController,
+      planner: undefined, // Will be set when planner is created
+      streamId,
+    });
+  }
+  
+  // Track if we've already handled the abort
+  let hasAborted = false;
+  let checkRequestState: NodeJS.Timeout | null = null;
+  
+  // Handle explicit request abort (when frontend calls AbortController.abort())
+  // This is the PRIMARY way to detect user-initiated cancellation
+  req.on('aborted', () => {
+    if (!hasAborted && !res.headersSent) {
+      console.log('⏹️  Request aborted by client (user stopped)');
+      hasAborted = true;
+      if (checkRequestState) {
+        clearInterval(checkRequestState);
+        checkRequestState = null;
+      }
+      abortController.abort();
+      if (planner) {
+        planner.cleanup().catch(err => console.error('Error during cleanup on abort:', err));
+      }
+      if (streamId) {
+        activeOperations.delete(streamId);
+      }
+    }
+  });
+  
+  // Monitor request state periodically as a fallback
+  // This catches cases where the request is closed but 'aborted' event doesn't fire
+  checkRequestState = setInterval(() => {
+    // Only abort if:
+    // 1. We haven't already aborted
+    // 2. The response hasn't been sent
+    // 3. The request is actually destroyed/aborted (not just a temporary state)
+    // 4. The socket is actually closed
+    if (!hasAborted && !res.headersSent) {
+      const isDestroyed = req.destroyed || req.aborted;
+      const isSocketClosed = req.socket?.destroyed || req.socket?.readyState === 'closed';
+      
+      // Only abort if BOTH the request AND socket are closed
+      // This indicates a real disconnect, not just a temporary network issue
+      if (isDestroyed && isSocketClosed) {
+        console.log('⏹️  Client disconnected, cancelling planner...');
+        hasAborted = true;
+        if (checkRequestState) {
+          clearInterval(checkRequestState);
+          checkRequestState = null;
+        }
+        abortController.abort();
+        if (planner) {
+          planner.cleanup().catch(err => console.error('Error during cleanup on disconnect:', err));
+        }
+      }
+    } else if (res.headersSent || hasAborted) {
+      // Request completed or already aborted, stop checking
+      if (checkRequestState) {
+        clearInterval(checkRequestState);
+        checkRequestState = null;
+      }
+    }
+  }, 1000); // Check every 1 second for faster response
+
   try {
-    const { url, maxNavigations, ignoredTags, settings } = req.body;
+    const { url, maxNavigations, ignoredTags, settings, streamId: _streamId } = req.body;
 
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });
+    }
+
+    // Enable log interception if streamId is provided
+    if (streamId) {
+      logStreamer.enableInterception(streamId);
+      logInterceptorEnabled = true;
     }
 
     // Apply settings overrides for planner
@@ -67,11 +201,20 @@ app.post('/api/planner/run', async (req, res) => {
     console.log(`   Max navigations: ${maxNavigations || 3}`);
     console.log(`   AI enabled: ${settings?.useAI || false}`);
     console.log(`   TTS enabled: ${settings?.useTTS || false}`);
+    console.log(`   Headless mode: ${settings?.headless || false}`);
     
-    const planner = new Planner();
+    planner = new Planner();
+    
+    // Update the stored operation with the planner instance
+    if (streamId) {
+      const operation = activeOperations.get(streamId);
+      if (operation) {
+        operation.planner = planner;
+      }
+    }
     
     try {
-      await planner.initialize(settings?.useAI || false, settings?.useTTS || false);
+      await planner.initialize(settings?.useAI || false, settings?.useTTS || false, settings?.headless || false);
       console.log('✅ Planner initialized, browser launched');
 
       // Override ignored tags if provided - we'll need to pass this to the planner
@@ -85,17 +228,26 @@ app.post('/api/planner/run', async (req, res) => {
       
       console.log('🌐 Starting exploration...');
       // Run the exploration - this is a long-running operation
+      // Pass abort signal so planner can be cancelled
       const plan = await planner.explore(
         url,
         seedPath,
         maxNavigations || 3,
         settings?.useAI || false,
-        settings?.useTTS || false
+        settings?.useTTS || false,
+        settings?.headless || false,
+        abortController.signal
       );
 
       console.log(`✅ Exploration complete! Generated ${plan.scenarios.length} scenarios`);
       await planner.saveMarkdown(plan, 'specs/test-plan.md');
       await planner.cleanup();
+
+      // Check if request was cancelled
+      if (abortController.signal.aborted) {
+        console.log('⏹️  Request was cancelled');
+        return; // Don't send response, client already disconnected
+      }
 
       res.json({
         success: true,
@@ -103,21 +255,71 @@ app.post('/api/planner/run', async (req, res) => {
         scenarios: plan.scenarios.length,
       });
     } catch (error: any) {
+      // If cancelled, don't send error response
+      if (error.message === 'Exploration cancelled' || abortController.signal.aborted) {
+        console.log('⏹️  Planner cancelled');
+        return; // Client already disconnected or cancelled
+      }
+
       console.error('❌ Planner error:', error);
       console.error('Stack:', error.stack);
       try {
-        await planner.cleanup();
+        if (planner) {
+          await planner.cleanup();
+        }
       } catch (cleanupError) {
         console.error('Error during cleanup:', cleanupError);
       }
-      res.status(500).json({ 
-        error: error.message || 'Failed to run planner',
-        details: error.stack 
-      });
+      
+      // Only send error if request is still active
+      if (!res.headersSent && !abortController.signal.aborted) {
+        res.status(500).json({ 
+          error: error.message || 'Failed to run planner',
+          details: error.stack 
+        });
+      }
     }
   } catch (error: any) {
+    // If cancelled, don't send error response
+    if (error.message === 'Exploration cancelled' || abortController.signal.aborted) {
+      console.log('⏹️  Planner cancelled');
+      return; // Client already disconnected or cancelled
+    }
+
     console.error('Planner error:', error);
-    res.status(500).json({ error: error.message || 'Failed to run planner' });
+    
+    // Only send error if request is still active
+    if (!res.headersSent && !abortController.signal.aborted) {
+      res.status(500).json({ error: error.message || 'Failed to run planner' });
+    }
+  } finally {
+      // Clear the request state check interval
+      if (checkRequestState) {
+        clearInterval(checkRequestState);
+        checkRequestState = null;
+      }
+      
+      // Cleanup planner if it exists
+      if (planner) {
+        try {
+          await planner.cleanup();
+        } catch (cleanupError) {
+          console.error('Error during cleanup:', cleanupError);
+        }
+      }
+      
+      // Remove from active operations
+      if (streamId) {
+        activeOperations.delete(streamId);
+      }
+
+      // Disable log interception
+      if (logInterceptorEnabled) {
+        logStreamer.disableInterception();
+        if (streamId) {
+          logStreamer.stopStream(streamId);
+        }
+      }
   }
 });
 
@@ -147,11 +349,20 @@ app.get('/api/generator/test-plan', async (req, res) => {
 });
 
 app.post('/api/generator/run', async (req, res) => {
+  const streamId = req.body.streamId as string | undefined;
+  let logInterceptorEnabled = false;
+
   try {
-    const { testPlan, baseUrl, settings } = req.body;
+    const { testPlan, baseUrl, settings, streamId: _streamId } = req.body;
 
     if (!testPlan || !baseUrl) {
       return res.status(400).json({ error: 'Test plan and base URL are required' });
+    }
+
+    // Enable log interception if streamId is provided
+    if (streamId) {
+      logStreamer.enableInterception(streamId);
+      logInterceptorEnabled = true;
     }
 
     // Save test plan temporarily
@@ -187,6 +398,14 @@ app.post('/api/generator/run', async (req, res) => {
   } catch (error: any) {
     console.error('Generator error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate tests' });
+  } finally {
+    // Disable log interception
+    if (logInterceptorEnabled) {
+      logStreamer.disableInterception();
+      if (streamId) {
+        logStreamer.stopStream(streamId);
+      }
+    }
   }
 });
 
@@ -223,11 +442,20 @@ app.get('/api/healer/test-suites', async (req, res) => {
 });
 
 app.post('/api/healer/run', async (req, res) => {
+  const streamId = req.body.streamId as string | undefined;
+  let logInterceptorEnabled = false;
+
   try {
-    const { testSuite, settings } = req.body;
+    const { testSuite, settings, streamId: _streamId } = req.body;
 
     if (!testSuite) {
       return res.status(400).json({ error: 'Test suite is required' });
+    }
+
+    // Enable log interception if streamId is provided
+    if (streamId) {
+      logStreamer.enableInterception(streamId);
+      logInterceptorEnabled = true;
     }
 
     // Apply settings overrides for healer
@@ -287,6 +515,14 @@ app.post('/api/healer/run', async (req, res) => {
   } catch (error: any) {
     console.error('Healer error:', error);
     res.status(500).json({ error: error.message || 'Failed to heal tests' });
+  } finally {
+    // Disable log interception
+    if (logInterceptorEnabled) {
+      logStreamer.disableInterception();
+      if (streamId) {
+        logStreamer.stopStream(streamId);
+      }
+    }
   }
 });
 

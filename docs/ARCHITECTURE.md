@@ -6,16 +6,49 @@ This document provides a comprehensive overview of the Cohort QA system architec
 
 1. [High-Level Architecture](#high-level-architecture)
 2. [Core Modules](#core-modules)
-3. [AI Components](#ai-components)
-4. [Data Flow](#data-flow)
-5. [Configuration System](#configuration-system)
-6. [AI Usage Matrix](#ai-usage-matrix)
+3. [API Server & Frontend](#api-server--frontend)
+4. [AI Components](#ai-components)
+5. [Data Flow](#data-flow)
+6. [Configuration System](#configuration-system)
+7. [AI Usage Matrix](#ai-usage-matrix)
 
 ---
 
 ## High-Level Architecture
 
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend PWA (React + Vite)                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │   Planner    │  │  Generator   │  │   Healer     │         │
+│  │    Page     │  │    Page      │  │    Page      │         │
+│  └──────┬──────┘  └──────┬───────┘  └──────┬───────┘         │
+│         │                 │                   │                 │
+│         │  ┌──────────────┴───────────────────┴──────────────┐  │
+│         │  │         LogOutput Component (SSE)             │  │
+│         │  │    Real-time log streaming from backend        │  │
+│         │  └───────────────────────────────────────────────┘  │
+│         │                                                      │
+└─────────┼──────────────────────────────────────────────────────┘
+          │ HTTP REST API + SSE
+          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    API Server (Express.js)                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              Log Streamer (Server-Sent Events)           │  │
+│  │  - Intercepts console.log/error/warn/info                │  │
+│  │  - Streams logs to connected frontend clients           │  │
+│  │  - Manages multiple concurrent streams                  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│         │                 │                   │                 │
+│         ▼                 ▼                   ▼                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
+│  │   Planner    │  │  Generator   │  │   Healer     │        │
+│  │   Endpoint   │  │   Endpoint   │  │   Endpoint   │        │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘        │
+└─────────┼─────────────────┼───────────────────┼─────────────────┘
+          │                 │                   │
+          ▼                 ▼                   ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                         CLI (cli.ts)                            │
 │              Entry point for all commands                       │
@@ -84,11 +117,13 @@ The Planner module explores web applications and generates test plans.
   - Coordinates exploration flow
   - Tracks visited pages
   - Generates test plans
+  - Supports headless mode (configurable via CLI or frontend)
 
 - **`elements/ElementDetector.ts`** - Finds interactive elements
   - Scans DOM (including Shadow DOM)
   - Filters by visibility and interactivity
-  - Excludes elements in ignored tags (header, nav, aside, footer)
+  - Excludes elements in ignored tags (header, aside, footer, dbs-top-bar)
+  - Configurable ignored tags via `config.yaml` or frontend settings
 
 - **`interactions/InteractionHandler.ts`** - Handles user interactions
   - Clicks buttons, links, inputs
@@ -230,6 +265,334 @@ Automatically fixes failing Playwright tests.
 - AI analyzes test failures and suggests best selector strategies
 - Focuses on test coverage, maintainability, and Playwright best practices
 - Falls back to heuristic-based fixers if AI unavailable
+
+---
+
+## API Server & Frontend
+
+### API Server (`src/api/server.ts`)
+
+The API server provides a REST API and Server-Sent Events (SSE) interface for the frontend PWA to interact with the Planner, Generator, and Healer components.
+
+#### Endpoints:
+
+- **`GET /api/logs/stream`** - Server-Sent Events endpoint for real-time log streaming
+  - Query parameters: `streamId` (required), `operation` (optional)
+  - Streams console logs from backend operations to connected frontend clients
+  - Supports multiple concurrent streams (one per operation)
+
+- **`POST /api/planner/run`** - Execute planner exploration
+  - Body: `{ url, maxNavigations, ignoredTags, settings, streamId, customPrompts }`
+  - Settings: `{ useAI, aiProvider, aiModel, useTTS, ttsProvider, ttsVoice, headless }`
+  - CustomPrompts: `{ planner?, ttsPrefix?, ttsThinking?, ttsPersonalityDescriptions? }`
+  - Returns: `{ success, message, testPlanPath }`
+  - Creates an active operation entry that can be stopped via `/api/planner/stop`
+
+- **`POST /api/planner/stop`** - Stop a running planner operation
+  - Body: `{ streamId }` (required)
+  - Immediately aborts the planner's abort signal, triggering cleanup
+  - Returns: `{ success, message }` or `{ error }` if operation not found
+  - Used by frontend "Stop" button to cancel long-running operations
+
+- **`POST /api/generator/run`** - Generate test code from test plan
+  - Body: `{ testPlan, baseUrl, settings, streamId, customPrompts }`
+  - Settings: `{ useAI, aiProvider, aiModel }`
+  - CustomPrompts: `{ generator? }`
+  - Returns: `{ success, message, testSuitePath }`
+
+- **`POST /api/healer/run`** - Heal broken tests
+  - Body: `{ testSuitePath, settings, streamId, customPrompts }`
+  - Settings: `{ useAI, aiProvider, aiModel }`
+  - CustomPrompts: `{ healer? }`
+  - Returns: `{ success, message, healedFiles }`
+
+- **`GET /api/generator/test-plan`** - Get latest test plan
+  - Returns: `{ content, baseUrl }`
+
+- **`GET /api/healer/test-suites`** - List available test suites
+  - Returns: `{ suites: [{ name, path, files }] }`
+
+- **`GET /api/healer/suite/:suiteName`** - Get test suite details
+  - Returns: `{ files: [{ name, path, content }] }`
+
+- **`GET /api/healer/file/:suiteName/:fileName`** - Get test file content
+  - Returns: `{ content }`
+
+#### Log Streaming (`src/api/log-streamer.ts`)
+
+The log streamer intercepts console output and streams it to connected frontend clients via Server-Sent Events (SSE).
+
+**Features:**
+- Intercepts `console.log`, `console.error`, `console.warn`, `console.info`
+- Manages multiple concurrent log streams (one per operation)
+- Automatically cleans up streams on client disconnect
+- Sends heartbeat messages every 30 seconds to keep connections alive
+- Strips ANSI codes for cleaner frontend display
+
+**Flow:**
+1. Frontend generates unique `streamId` and connects to `/api/logs/stream?streamId=...`
+2. Backend operation calls `logStreamer.enableInterception(streamId)`
+3. All console output is captured and sent to the frontend via SSE
+4. Frontend receives logs in real-time and displays them in `LogOutput` component
+5. On operation completion, `logStreamer.disableInterception()` is called
+
+**Example:**
+```typescript
+// Frontend
+const streamId = `planner_${Date.now()}_${Math.random()}`;
+const eventSource = new EventSource(`/api/logs/stream?streamId=${streamId}`);
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  setLogs(prev => [...prev, data.message]);
+};
+
+// Backend
+logStreamer.enableInterception(streamId);
+console.log('This will be streamed to frontend');
+// ... operation runs ...
+logStreamer.disableInterception();
+```
+
+#### Frontend-Server Interaction Sequence
+
+The following sequence diagram illustrates the complete interaction flow between the frontend and server, including API endpoints, log streaming, and stop functionality:
+
+```mermaid
+sequenceDiagram
+    participant F as Frontend (React)
+    participant API as API Server (Express)
+    participant LS as Log Streamer (SSE)
+    participant P as Planner/Generator/Healer
+    participant AC as AbortController
+
+    Note over F,AC: Planner Operation Flow
+
+    F->>F: User clicks "Run Planner"
+    F->>F: Generate streamId
+    F->>LS: GET /api/logs/stream?streamId={id}
+    LS-->>F: SSE Connection Established
+    
+    F->>API: POST /api/planner/run<br/>{url, settings, streamId, ...}
+    API->>API: Store operation in activeOperations Map
+    API->>API: Create AbortController
+    API->>LS: enableInterception(streamId)
+    API->>P: Initialize Planner
+    API->>P: explore(url, ..., abortSignal)
+    
+    Note over P: Planner starts exploration
+    
+    loop During Operation
+        P->>P: Check abortSignal.aborted
+        P->>P: Perform actions (click, navigate, etc.)
+        P->>P: console.log(...)
+        P->>LS: Log intercepted & streamed
+        LS-->>F: SSE: Log message
+        F->>F: Update LogOutput component
+    end
+    
+    alt User Clicks Stop
+        F->>API: POST /api/planner/stop<br/>{streamId}
+        API->>API: Lookup operation in Map
+        API->>AC: abortController.abort()
+        API->>P: Cleanup planner
+        API->>LS: disableInterception(streamId)
+        API->>LS: stopStream(streamId)
+        API-->>F: {success: true, message: "Planner stopped"}
+        LS-->>F: SSE: Stream closed
+        F->>F: Close EventSource
+        Note over P: Planner checks abortSignal<br/>and throws "Exploration cancelled"
+    end
+    
+    alt Operation Completes Successfully
+        P->>API: Return test plan
+        API->>LS: disableInterception(streamId)
+        API->>LS: stopStream(streamId)
+        API->>API: Remove from activeOperations
+        API-->>F: {success: true, message: "Generated X scenarios"}
+        LS-->>F: SSE: Stream closed
+        F->>F: Close EventSource
+    end
+
+    Note over F,AC: Generator Operation Flow
+
+    F->>F: User clicks "Generate Tests"
+    F->>F: Generate streamId
+    F->>LS: GET /api/logs/stream?streamId={id}
+    LS-->>F: SSE Connection Established
+    
+    F->>API: POST /api/generator/run<br/>{testPlan, settings, streamId, ...}
+    API->>API: Store operation in activeOperations Map
+    API->>API: Create AbortController
+    API->>LS: enableInterception(streamId)
+    API->>P: Generate tests (Generator)
+    
+    Note over P: Generator processes test plan
+    
+    loop During Generation
+        P->>P: Generate test code
+        P->>P: console.log(...)
+        P->>LS: Log intercepted & streamed
+        LS-->>F: SSE: Log message
+        F->>F: Update LogOutput component
+    end
+    
+    P->>API: Return generated test suite
+    API->>LS: disableInterception(streamId)
+    API->>LS: stopStream(streamId)
+    API->>API: Remove from activeOperations
+    API-->>F: {success: true, message: "Tests generated"}
+    LS-->>F: SSE: Stream closed
+    F->>F: Close EventSource
+
+    Note over F,AC: Healer Operation Flow
+
+    F->>F: User clicks "Heal Tests"
+    F->>F: Generate streamId
+    F->>LS: GET /api/logs/stream?streamId={id}
+    LS-->>F: SSE Connection Established
+    
+    F->>API: POST /api/healer/run<br/>{testSuite, settings, streamId, ...}
+    API->>API: Store operation in activeOperations Map
+    API->>API: Create AbortController
+    API->>LS: enableInterception(streamId)
+    API->>P: Heal tests (Healer)
+    
+    Note over P: Healer runs and fixes tests
+    
+    loop During Healing
+        P->>P: Run tests, detect failures
+        P->>P: Fix broken tests
+        P->>P: console.log(...)
+        P->>LS: Log intercepted & streamed
+        LS-->>F: SSE: Log message
+        F->>F: Update LogOutput component
+    end
+    
+    P->>API: Return healed files
+    API->>LS: disableInterception(streamId)
+    API->>LS: stopStream(streamId)
+    API->>API: Remove from activeOperations
+    API-->>F: {success: true, message: "Healing completed", healedFiles: [...]}
+    LS-->>F: SSE: Stream closed
+    F->>F: Close EventSource
+    
+    Note over F,AC: Additional Endpoints
+
+    F->>API: GET /api/generator/test-plan
+    API-->>F: {content: "...", baseUrl: "..."}
+    
+    F->>API: GET /api/healer/test-suites
+    API-->>F: {suites: [{name, path, files}]}
+    
+    F->>API: GET /api/healer/suite/:suiteName
+    API-->>F: {files: [{name, path, content}]}
+    
+    F->>API: GET /api/healer/file/:suiteName/:fileName
+    API-->>F: {content: "..."}
+```
+
+**Key Interactions:**
+
+1. **Log Streaming (SSE)**: Established before the main operation starts, streams logs in real-time throughout the operation
+2. **Operation Management**: Each operation is stored in `activeOperations` Map with its `AbortController` for immediate cancellation
+3. **Stop Functionality**: Dedicated stop endpoints allow immediate cancellation without waiting for request timeout
+4. **Cleanup**: Both successful completion and cancellation properly clean up resources (log interception, streams, browser instances)
+5. **Abort Signal**: Passed to long-running operations (Planner) to check for cancellation at key points
+
+### Frontend PWA (`frontend/`)
+
+A standalone Progressive Web App (PWA) built with React, TypeScript, Vite, and Tailwind CSS.
+
+#### Components:
+
+- **`pages/PlannerPage.tsx`** - Planner interface
+  - URL input, max navigations, ignored tags configuration
+  - Settings panel: AI provider/model, TTS provider/voice, headless mode
+  - System prompt editor for planner AI
+  - TTS prompt editors (prefix, thinking, personality descriptions)
+  - Real-time log output via SSE
+  - Force stop capability (calls `/api/planner/stop` endpoint)
+
+- **`pages/GeneratorPage.tsx`** - Generator interface
+  - Test plan editor (loads latest plan)
+  - Settings panel: AI provider/model
+  - System prompt editor for generator AI
+  - Real-time log output via SSE
+  - Force stop capability
+
+- **`pages/HealerPage.tsx`** - Healer interface
+  - Test suite selector (lists folders in `tests/` excluding `seed`)
+  - File browser (shows suite contents)
+  - File viewer (displays test file content)
+  - Diff viewer (shows healed file changes)
+  - Settings panel: AI provider/model
+  - System prompt editor for healer AI
+  - Real-time log output via SSE
+  - Force stop capability
+
+- **`components/SettingsPanel.tsx`** - Reusable settings configuration component
+  - AI provider/model selection (dropdowns with provider-specific options)
+  - TTS provider/voice selection (planner only, dropdowns with provider-specific options)
+  - System prompt editors for each component
+  - TTS prompt editors (prefix, thinking, personality descriptions)
+  - Browser settings (headless mode for planner)
+  - Shows indicators when custom prompts are in use
+
+- **`components/PromptEditor.tsx`** - Modal editor for AI system prompts
+  - Large editor (95% screen height) for easy editing
+  - Save/Cancel/Revert to default functionality
+  - Supports all prompt types (planner, generator, healer, TTS)
+
+- **`components/PersonalityEditor.tsx`** - Modal editor for TTS personality descriptions
+  - Edits all four personality types (thinking, realizing, deciding, acting)
+  - Individual textarea for each personality
+  - Save/Cancel/Revert to default functionality
+
+- **`components/LogOutput.tsx`** - Terminal-like log display component
+  - Collapsible by default, auto-expands when logs arrive
+  - Real-time log streaming via SSE
+  - Terminal-like styling (green border, monospace font)
+  - Shows log count and connection status
+
+- **`components/LogOutput.tsx`** - Terminal-like log display
+  - Collapsible by default, auto-expands when logs arrive
+  - Terminal styling (dark background, green text, monospace font)
+  - Scrollable log history
+  - Shows log count in header
+
+- **`components/SettingsPanel.tsx`** - Reusable settings configuration
+  - AI provider/model selection (per component)
+  - TTS provider/voice selection (planner only)
+  - Headless mode toggle (planner only)
+  - Settings override global `config.yaml` values
+
+#### Features:
+
+- **Real-time Log Streaming**: All backend operations stream logs to the frontend via SSE
+- **Settings Override**: Each component can override global `config.yaml` settings
+- **Force Stop**: AbortController-based cancellation for long-running operations
+- **PWA Support**: Installable as a Progressive Web App
+- **Responsive Design**: Works on desktop and mobile devices
+- **Dark Mode**: Automatic dark mode support
+
+#### Architecture:
+
+```
+Frontend (React + Vite)
+  ├── Pages (Planner, Generator, Healer)
+  ├── Components (LogOutput, SettingsPanel)
+  ├── API Client (axios with baseURL)
+  └── SSE Client (EventSource for log streaming)
+        │
+        ▼
+API Server (Express.js)
+  ├── REST Endpoints (/api/planner/run, etc.)
+  ├── SSE Endpoint (/api/logs/stream)
+  └── Log Streamer (intercepts console output)
+        │
+        ▼
+Backend Agents (Planner, Generator, Healer)
+```
 
 ---
 
@@ -533,7 +896,8 @@ ai:
 planner:
   maxClicks: 50
   maxConsecutiveFailures: 10
-  ignoredTags: [header, nav, aside, footer, dbs-top-bar]
+  ignoredTags: [header, aside, footer, dbs-top-bar]  # Elements in these tags are excluded from interaction
+  # Note: 'nav' was removed from ignored tags to allow navigation menu interactions
   # ... more settings
 
 tts:
@@ -721,12 +1085,21 @@ src/
 
 ## Summary
 
-- **Planner**: Uses AI (Ollama/OpenAI/Anthropic) for smart element selection, falls back to heuristics
+- **Planner**: Uses AI (Ollama/OpenAI/Anthropic) for smart element selection, falls back to heuristics. Supports headless mode for background execution.
 - **Generator**: Uses AI (Ollama/OpenAI/Anthropic) for intelligent test code generation, falls back to heuristics
 - **Healer**: Uses AI (Ollama/OpenAI/Anthropic) for intelligent test fixing with best selectors, falls back to heuristic fixers
-- **TTS**: Uses AI for prefix generation, dedicated APIs for speech synthesis
-- **Configuration**: Centralized in `config.yaml` with environment variable overrides
-- **AI Providers**: Each component (Planner, Generator, Healer) can use independent AI providers and models
+- **TTS**: Uses AI for prefix generation, dedicated APIs for speech synthesis. Supports OpenAI, Piper, and macOS providers with customizable voices and personality descriptions.
+- **API Server**: REST API + Server-Sent Events (SSE) for real-time log streaming to frontend. Includes dedicated stop endpoints for operation cancellation.
+- **Frontend PWA**: React-based Progressive Web App with real-time log output, settings override, custom prompt editing, and force stop capabilities
+- **Configuration**: Centralized in `config.yaml` with environment variable overrides. Frontend can override settings per operation.
+- **AI Providers**: Each component (Planner, Generator, Healer) can use independent AI providers and models, configurable via frontend dropdowns
+- **Ignored Tags**: Configurable list of HTML tags to exclude from interaction (default: `header`, `aside`, `footer`, `dbs-top-bar`)
+- **Operation Management**: Active operations tracked with abort controllers. Dedicated stop endpoints (`/api/planner/stop`, etc.) for immediate cancellation.
+- **Custom Prompts**: Edit AI system prompts and TTS prompts (prefix, thinking, personality descriptions) per operation via frontend UI
 
 The system is designed to work with or without AI, gracefully degrading to heuristics when AI is unavailable. All AI components support the `heuristic` provider option to explicitly disable AI and use heuristics only.
+
+**Access Methods:**
+- **CLI**: Direct command-line interface for all operations
+- **Frontend PWA**: Web-based interface with real-time log streaming, settings override, custom prompt editing, and operation management
 

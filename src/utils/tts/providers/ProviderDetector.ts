@@ -25,8 +25,10 @@ export class ProviderDetector {
    * Uses TTS_PROVIDER env var or config, then auto-detects
    */
   static async detectProvider(): Promise<ProviderInfo> {
+    // Check environment variable first (highest priority for runtime overrides)
+    const envProvider = process.env.TTS_PROVIDER?.toLowerCase();
     const config = loadAIConfig();
-    const ttsProvider = config.tts.provider;
+    const ttsProvider = envProvider || config.tts.provider;
     
     // If TTS provider is explicitly set to OpenAI, check for API key
     if (ttsProvider === 'openai') {

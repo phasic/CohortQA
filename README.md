@@ -522,9 +522,39 @@ Then open http://localhost:3000 in your browser.
 ### Features
 
 - **Planner Page**: Enter URL, configure navigations, ignored tags, and AI/TTS settings
+  - Headless mode toggle (run browser in background)
+  - Real-time log streaming from backend operations
+  - System prompt editor for planner AI
+  - TTS prompt editors (prefix, thinking, personality descriptions)
+  - Force stop button (immediately cancels running operations)
 - **Generator Page**: View and edit test plans, generate Playwright tests
+  - Real-time log streaming from backend operations
+  - System prompt editor for generator AI
+  - Force stop button
 - **Healer Page**: Browse test suites and run healing operations
+  - View test file contents and diffs for healed files
+  - Real-time log streaming from backend operations
+  - System prompt editor for healer AI
+  - Force stop button
 - **Settings Override**: Override global `config.yaml` settings per operation
+  - Independent AI provider/model selection for each component
+  - Provider-specific dropdowns for AI models and TTS voices
+  - TTS settings (planner only): provider, voice, and prompt customization
+- **Custom Prompt Editing**: Edit AI system prompts and TTS prompts per operation
+  - Planner, Generator, Healer system prompts (large modal editor)
+  - TTS prefix and thinking prompts
+  - TTS personality descriptions (thinking, realizing, deciding, acting)
+  - Revert to default functionality
+  - Visual indicators when custom prompts are in use
+- **Real-time Log Streaming**: All backend operations stream logs to the frontend via Server-Sent Events (SSE)
+  - Terminal-like log output component
+  - Collapsible by default, auto-expands when logs arrive
+  - Shows connection status and log count
+- **Operation Management**: Active operations can be stopped immediately
+  - Dedicated stop endpoints (`/api/planner/stop`, etc.)
+  - Operations tracked with abort controllers
+  - Proper cleanup of browser resources on stop
+  - Frontend "Stop" button calls stop endpoint and aborts HTTP request
 - **PWA**: Installable as a standalone app (works offline after first load)
 
 ### Building for Production

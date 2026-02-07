@@ -7,9 +7,9 @@ The Banking & Insurance for private individuals & business - ING Belgium applica
 
 **Pages Explored:**
 1. Banking & Insurance for private individuals & business - ING Belgium (https://www.ing.be/en/individuals)
-2. start to invest - ING Belgium (https://www.ing.be/en/individuals/investing/start-to-invest)
-3. Easy online investment plan from €10/month - ING Belgium (https://www.ing.be/en/individuals/investing/easy-invest)
-4. Investment calculator - ING Belgium (https://www.ing.be/en/individuals/investing/investment-calculator)
+2. When should you give your child a bank card? - ING Belgium (https://www.ing.be/en/individuals/daily-banking/what-is-the-best-age-to-give-a-child-a-bank-card)
+3. Get in touch - ING Belgium (https://www.ing.be/en/individuals/services/get-in-touch)
+4. Not completely satisfied with our services? Contact us! - ING Belgium (https://www.ing.be/en/individuals/services/complaint-handling)
 
 
 ## Test Scenarios
@@ -26,87 +26,87 @@ The Banking & Insurance for private individuals & business - ING Belgium applica
 - Page title is "Banking & Insurance for private individuals & business - ING Belgium"
 - Key elements are visible
 
-### 2. Verify start to invest - ING Belgium Loads Correctly
+### 2. Verify When should you give your child a bank card? - ING Belgium Loads Correctly
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/investing/start-to-invest
+1. Navigate to https://www.ing.be/en/individuals/daily-banking/what-is-the-best-age-to-give-a-child-a-bank-card
 
 **Expected Results:**
 - Page loads without errors
-- Page title is "start to invest - ING Belgium"
+- Page title is "When should you give your child a bank card? - ING Belgium"
 - Key elements are visible
 
-### 3. Verify Easy online investment plan from €10/month - ING Belgium Loads Correctly
+### 3. Verify Get in touch - ING Belgium Loads Correctly
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/investing/easy-invest
+1. Navigate to https://www.ing.be/en/individuals/services/get-in-touch
 
 **Expected Results:**
 - Page loads without errors
-- Page title is "Easy online investment plan from €10/month - ING Belgium"
+- Page title is "Get in touch - ING Belgium"
 - Key elements are visible
 
-### 4. Verify Investment calculator - ING Belgium Loads Correctly
+### 4. Verify Not completely satisfied with our services? Contact us! - ING Belgium Loads Correctly
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/investing/investment-calculator
+1. Navigate to https://www.ing.be/en/individuals/services/complaint-handling
 
 **Expected Results:**
 - Page loads without errors
-- Page title is "Investment calculator - ING Belgium"
+- Page title is "Not completely satisfied with our services? Contact us! - ING Belgium"
 - Key elements are visible
 
-### 5. Navigate from Banking & Insurance for private individuals & business - ING Belgium to start to invest - ING Belgium
+### 5. Navigate from Banking & Insurance for private individuals & business - ING Belgium to When should you give your child a bank card? - ING Belgium
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
 1. Navigate to https://www.ing.be/en/individuals
-2. Click on the "link" link that navigates to start to invest - ING Belgium
+2. Click on the "link" link that navigates to When should you give your child a bank card? - ING Belgium
 3. Wait for navigation to complete
 
 **Expected Results:**
 - Link with text "link" is visible and clickable
 - Navigation completes without errors
-- Page title is "start to invest - ING Belgium"
+- Page title is "When should you give your child a bank card? - ING Belgium"
 - URL changes to the target page
 - Target page loads successfully
 
-### 6. Navigate from start to invest - ING Belgium to Easy online investment plan from €10/month - ING Belgium
+### 6. Navigate from When should you give your child a bank card? - ING Belgium to Get in touch - ING Belgium
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/investing/start-to-invest
-2. Click on the "link" link that navigates to Easy online investment plan from €10/month - ING Belgium
+1. Navigate to https://www.ing.be/en/individuals/daily-banking/what-is-the-best-age-to-give-a-child-a-bank-card
+2. Click on the "link" link that navigates to Get in touch - ING Belgium
 3. Wait for navigation to complete
 
 **Expected Results:**
 - Link with text "link" is visible and clickable
 - Navigation completes without errors
-- Page title is "Easy online investment plan from €10/month - ING Belgium"
+- Page title is "Get in touch - ING Belgium"
 - URL changes to the target page
 - Target page loads successfully
 
-### 7. Navigate from Easy online investment plan from €10/month - ING Belgium to Investment calculator - ING Belgium
+### 7. Navigate from Get in touch - ING Belgium to Not completely satisfied with our services? Contact us! - ING Belgium
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/investing/easy-invest
-2. Click on the "link" link that navigates to Investment calculator - ING Belgium
+1. Navigate to https://www.ing.be/en/individuals/services/get-in-touch
+2. Click on the "link" link that navigates to Not completely satisfied with our services? Contact us! - ING Belgium
 3. Wait for navigation to complete
 
 **Expected Results:**
 - Link with text "link" is visible and clickable
 - Navigation completes without errors
-- Page title is "Investment calculator - ING Belgium"
+- Page title is "Not completely satisfied with our services? Contact us! - ING Belgium"
 - URL changes to the target page
 - Target page loads successfully
 

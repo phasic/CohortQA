@@ -1,25 +1,65 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { api } from '../services/api';
 import SettingsPanel from '../components/SettingsPanel';
-import { Sparkles, Play } from 'lucide-react';
+import LogOutput from '../components/LogOutput';
+import { Sparkles, Play, Square } from 'lucide-react';
+import { DEFAULT_PROMPTS } from '../constants/defaultPrompts';
 
 export default function PlannerPage() {
   const [url, setUrl] = useState('');
   const [maxNavigations, setMaxNavigations] = useState(3);
-  const [ignoredTags, setIgnoredTags] = useState<string[]>(['header', 'nav', 'aside', 'footer', 'dbs-top-bar']);
+  const [ignoredTags, setIgnoredTags] = useState<string[]>(['header', 'aside', 'footer', 'dbs-top-bar']);
   const [newTag, setNewTag] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [customPrompts, setCustomPrompts] = useState<{
+    planner?: string;
+    generator?: string;
+    healer?: string;
+    tts?: {
+      prefix?: string;
+      thinking?: string;
+      personalityDescriptions?: {
+        thinking?: string;
+        realizing?: string;
+        deciding?: string;
+        acting?: string;
+      };
+    };
+  }>({});
   
   // Settings overrides - separate for each component
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState<{
+    planner: {
+      useAI: boolean;
+      aiProvider: string;
+      aiModel: string;
+      headless?: boolean;
+    };
+    generator: {
+      useAI: boolean;
+      aiProvider: string;
+      aiModel: string;
+    };
+    healer: {
+      useAI: boolean;
+      aiProvider: string;
+      aiModel: string;
+    };
+    tts: {
+      useTTS: boolean;
+      ttsProvider: string;
+      ttsVoice: string;
+    };
+  }>({
     planner: {
       useAI: true,
       aiProvider: 'ollama',
       aiModel: 'mistral',
+      headless: false,
     },
     generator: {
       useAI: true,
@@ -49,12 +89,59 @@ export default function PlannerPage() {
     setIgnoredTags(ignoredTags.filter(t => t !== tag));
   };
 
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setResult(null);
     setLogs(['🚀 Starting planner...', `📍 URL: ${url}`, `🔢 Max navigations: ${maxNavigations}`]);
+
+    // Generate unique stream ID
+    const streamId = `planner_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Connect to SSE log stream (use same base as API service)
+    const eventSource = new EventSource(
+      `/api/logs/stream?streamId=${streamId}&operation=planner`
+    );
+
+    eventSourceRef.current = eventSource;
+    
+    // Store streamId in the eventSource for later access
+    (eventSourceRef.current as any).streamId = streamId;
+
+    eventSource.onopen = () => {
+      setLogs(prev => [...prev, '✅ Connected to log stream']);
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.message) {
+          setLogs(prev => [...prev, data.message]);
+        }
+      } catch (err) {
+        console.error('Failed to parse SSE message:', err);
+        setLogs(prev => [...prev, `⚠️ Failed to parse log message: ${err}`]);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('SSE error:', err);
+      setLogs(prev => [...prev, '❌ Log stream connection error']);
+      // Don't close immediately - might be a temporary issue
+    };
 
     abortControllerRef.current = new AbortController();
 
@@ -63,21 +150,19 @@ export default function PlannerPage() {
         url,
         maxNavigations,
         ignoredTags,
+        streamId,
         settings: {
           useAI: settings.planner.useAI,
           aiProvider: settings.planner.aiProvider,
           aiModel: settings.planner.aiModel,
+          headless: settings.planner.headless || false,
           useTTS: settings.tts.useTTS,
           ttsProvider: settings.tts.ttsProvider,
           ttsVoice: settings.tts.ttsVoice,
         },
       }, {
         signal: abortControllerRef.current.signal,
-        onDownloadProgress: (progressEvent: any) => {
-          // Handle streaming logs if implemented
-        },
       });
-      setLogs(prev => [...prev, '✅ Planner completed successfully!']);
       setResult(response.data.message || 'Planner completed successfully!');
     } catch (err: any) {
       if (err.name === 'CanceledError' || err.message === 'canceled') {
@@ -90,14 +175,34 @@ export default function PlannerPage() {
     } finally {
       setLoading(false);
       abortControllerRef.current = null;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     }
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
+    // First, try to stop via the dedicated stop endpoint
+    const currentStreamId = (eventSourceRef.current as any)?.streamId;
+    if (currentStreamId) {
+      try {
+        await api.post('/planner/stop', { streamId: currentStreamId });
+        setLogs(prev => [...prev, '⏹️ Stopping planner via API...']);
+      } catch (err) {
+        console.error('Failed to stop via API:', err);
+      }
+    }
+    
+    // Also abort the frontend request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       setLoading(false);
       setLogs(prev => [...prev, '⏹️ Stopping planner...']);
+    }
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
   };
 
@@ -115,7 +220,7 @@ export default function PlannerPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main form */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
           <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
             <div className="space-y-6">
               {/* URL Input */}
@@ -238,17 +343,65 @@ export default function PlannerPage() {
               )}
             </div>
           </form>
-
-          {/* Log Output */}
-          <div className="mt-6">
-            <LogOutput logs={logs} title="Planner Logs" />
-          </div>
         </div>
 
         {/* Settings Panel */}
         <div className="lg:col-span-1">
-          <SettingsPanel settings={settings} onChange={setSettings} component="planner" />
+          <SettingsPanel 
+            settings={settings} 
+            onChange={setSettings} 
+            component="planner"
+            customPrompts={customPrompts}
+            onPromptChange={(component, prompt) => {
+              setCustomPrompts(prev => ({
+                ...prev,
+                [component]: prompt === DEFAULT_PROMPTS[component] ? undefined : prompt,
+              }));
+            }}
+            onTTSPromptChange={(type, prompt) => {
+              setCustomPrompts(prev => {
+                const defaultPrompt = DEFAULT_PROMPTS.tts[type];
+                const newTTS = {
+                  ...prev.tts,
+                  [type]: prompt === defaultPrompt ? undefined : prompt,
+                };
+                // Remove tts object if all are undefined
+                if (!newTTS.prefix && !newTTS.thinking && !newTTS.personalityDescriptions) {
+                  const { tts, ...rest } = prev;
+                  return rest;
+                }
+                return {
+                  ...prev,
+                  tts: newTTS,
+                };
+              });
+            }}
+            onTTSPersonalityChange={(descriptions) => {
+              setCustomPrompts(prev => {
+                const defaultDescriptions = DEFAULT_PROMPTS.tts.personalityDescriptions;
+                const isDefault = JSON.stringify(descriptions) === JSON.stringify(defaultDescriptions);
+                const newTTS = {
+                  ...prev.tts,
+                  personalityDescriptions: isDefault ? undefined : descriptions,
+                };
+                // Remove tts object if all are undefined
+                if (!newTTS.prefix && !newTTS.thinking && !newTTS.personalityDescriptions) {
+                  const { tts, ...rest } = prev;
+                  return rest;
+                }
+                return {
+                  ...prev,
+                  tts: newTTS,
+                };
+              });
+            }}
+          />
         </div>
+      </div>
+
+      {/* Log Output - Always visible by default - Full width below grid */}
+      <div className="mt-8 w-full" style={{ display: 'block', visibility: 'visible' }}>
+        <LogOutput logs={logs} title="Planner Logs" />
       </div>
     </div>
   );

@@ -87,10 +87,77 @@ export class InteractionHandler {
   }
 
   /**
-   * Clicks a link element
+   * Removes overlays and modals that might block clicks
+   */
+  private static async removeBlockingOverlays(page: Page): Promise<void> {
+    await page.evaluate(() => {
+      // Remove common overlays, modals, and popups
+      const selectors = [
+        '[class*="overlay" i]',
+        '[class*="modal" i]',
+        '[id*="cookie" i]',
+        '[class*="cookie" i]',
+        '[id*="consent" i]',
+        '[class*="consent" i]',
+        '[id*="gdpr" i]',
+        '[class*="gdpr" i]',
+        '[role="dialog"]',
+        '.modal',
+        '.dialog',
+        '[class*="popup" i]',
+        '[class*="backdrop" i]',
+        '[class*="notification" i]',
+        '[class*="banner" i]'
+      ];
+
+      selectors.forEach(selector => {
+        try {
+          const elements = document.querySelectorAll(selector);
+          elements.forEach((el: Element) => {
+            const htmlEl = el as HTMLElement;
+            // Hide instead of remove to avoid breaking page functionality
+            htmlEl.style.display = 'none';
+            htmlEl.style.visibility = 'hidden';
+            htmlEl.style.opacity = '0';
+            htmlEl.style.pointerEvents = 'none';
+          });
+        } catch {
+          // Ignore selector errors
+        }
+      });
+
+      // Also try to close any visible dialogs
+      const dialogs = document.querySelectorAll('[role="dialog"], .modal, .dialog');
+      dialogs.forEach((dialog: Element) => {
+        const htmlDialog = dialog as HTMLElement;
+        if (htmlDialog.style.display !== 'none') {
+          // Try to find and click close buttons
+          const closeButtons = dialog.querySelectorAll(
+            'button[aria-label*="close" i], button:has-text("Close"), button:has-text("×"), button:has-text("✕"), [class*="close" i]'
+          );
+          if (closeButtons.length > 0) {
+            (closeButtons[0] as HTMLElement).click();
+          } else {
+            // Hide the dialog
+            htmlDialog.style.display = 'none';
+            htmlDialog.style.visibility = 'hidden';
+            htmlDialog.style.opacity = '0';
+            htmlDialog.style.pointerEvents = 'none';
+          }
+        }
+      });
+    });
+    await page.waitForTimeout(300);
+  }
+
+  /**
+   * Clicks a link element with multiple fallback strategies
    */
   private static async clickLink(page: Page, element: InteractiveElement): Promise<boolean> {
     try {
+      // Remove blocking overlays proactively
+      await this.removeBlockingOverlays(page);
+
       // For links, wait for navigation (either full page or hash change)
       const navigationPromise = Promise.race([
         page.waitForLoadState('domcontentloaded', { timeout: PLANNER_CONFIG.NAVIGATION_WAIT_TIMEOUT }).catch(() => {}),
@@ -103,13 +170,46 @@ export class InteractionHandler {
         ).catch(() => {})
       ]);
 
-      if (element.text && element.text.trim().length > 0) {
-        const link = page.getByRole('link', { name: element.text });
+      // Strategy 1: Try by href first (most reliable)
+      if (element.href) {
         try {
-          await link.waitFor({ state: 'visible', timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT });
-          await link.waitFor({ state: 'attached', timeout: 2000 });
-          await link.scrollIntoViewIfNeeded();
+          // Normalize href for matching
+          const normalizedHref = element.href.split('#')[0].replace(/\/$/, '');
+          const linkByHref = page.locator(`a[href*="${normalizedHref}"]`).first();
+          
+          await linkByHref.waitFor({ state: 'visible', timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT });
+          await linkByHref.scrollIntoViewIfNeeded();
+          
+          // Check if clickable
+          const isClickable = await linkByHref.evaluate((el) => {
+            const rect = el.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const elementAtPoint = document.elementFromPoint(centerX, centerY);
+            return elementAtPoint === el || el.contains(elementAtPoint);
+          });
 
+          if (!isClickable) {
+            await this.removeBlockingOverlays(page);
+          }
+
+          await linkByHref.click({ timeout: PLANNER_CONFIG.CLICK_TIMEOUT, force: false });
+          await navigationPromise;
+          await page.waitForTimeout(500);
+          return true;
+        } catch (hrefError) {
+          // Try next strategy
+        }
+      }
+
+      // Strategy 2: Try by text with getByRole (if text available)
+      if (element.text && element.text.trim().length > 0) {
+        try {
+          const link = page.getByRole('link', { name: element.text.trim() });
+          await link.waitFor({ state: 'visible', timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT });
+          await link.scrollIntoViewIfNeeded();
+          
+          // Check if clickable
           const isClickable = await link.evaluate((el) => {
             const rect = el.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
@@ -119,84 +219,120 @@ export class InteractionHandler {
           });
 
           if (!isClickable) {
-            await page.evaluate(() => {
-              const overlays = document.querySelectorAll('[class*="overlay"], [class*="modal"], [id*="cookie"]');
-              overlays.forEach((overlay: Element) => {
-                (overlay as HTMLElement).style.display = 'none';
-              });
-            });
-            await page.waitForTimeout(200);
+            await this.removeBlockingOverlays(page);
           }
 
           await link.click({ timeout: PLANNER_CONFIG.CLICK_TIMEOUT, force: false });
           await navigationPromise;
           await page.waitForTimeout(500);
           return true;
-        } catch {
+        } catch (textError) {
+          // Try with force click
           try {
+            const link = page.getByRole('link', { name: element.text.trim() });
+            await link.scrollIntoViewIfNeeded();
             await link.click({ timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT, force: true });
             await navigationPromise;
             await page.waitForTimeout(500);
             return true;
           } catch {
-            return false;
+            // Try next strategy
           }
         }
-      } else if ((element as any).shadowPath) {
-        const clicked = await page.evaluate((args: { shadowPath: string; href: string }) => {
-          const parts = args.shadowPath.split(' > ');
-          let root: any = document;
-          for (const part of parts) {
-            const el = root.querySelector(part);
-            if (el && el.shadowRoot) {
-              root = el.shadowRoot;
-            } else {
-              return false;
+      }
+
+      // Strategy 3: Try shadow DOM (if shadowPath available)
+      if ((element as any).shadowPath) {
+        try {
+          const clicked = await page.evaluate((args: { shadowPath: string; href: string }) => {
+            const parts = args.shadowPath.split(' > ');
+            let root: any = document;
+            for (const part of parts) {
+              const el = root.querySelector(part);
+              if (el && el.shadowRoot) {
+                root = el.shadowRoot;
+              } else {
+                return false;
+              }
             }
-          }
-          const link = root.querySelector(`a[href="${args.href}"]`);
-          if (link) {
-            link.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            link.click();
+            const link = root.querySelector(`a[href*="${args.href}"]`);
+            if (link) {
+              link.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              link.click();
+              return true;
+            }
+            return false;
+          }, { shadowPath: (element as any).shadowPath, href: element.href! });
+          
+          if (clicked) {
+            await navigationPromise;
+            await page.waitForTimeout(500);
             return true;
           }
-          return false;
-        }, { shadowPath: (element as any).shadowPath, href: element.href! });
-        
-        if (clicked) {
-          await navigationPromise;
-          await page.waitForTimeout(500);
-          return true;
+        } catch {
+          // Try next strategy
         }
-        return false;
-      } else {
-        const linkLocator = page.locator(element.selector).first();
+      }
+
+      // Strategy 4: Try by selector
+      if (element.selector && element.selector.length > 0) {
         try {
+          const linkLocator = page.locator(element.selector).first();
           await linkLocator.waitFor({ state: 'visible', timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT });
-          await linkLocator.waitFor({ state: 'attached', timeout: 2000 });
           await linkLocator.scrollIntoViewIfNeeded();
+          
+          // Check if clickable
+          const isClickable = await linkLocator.evaluate((el) => {
+            const rect = el.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const elementAtPoint = document.elementFromPoint(centerX, centerY);
+            return elementAtPoint === el || el.contains(elementAtPoint);
+          });
+
+          if (!isClickable) {
+            await this.removeBlockingOverlays(page);
+          }
+
           await linkLocator.click({ timeout: PLANNER_CONFIG.CLICK_TIMEOUT, force: false });
           await navigationPromise;
           await page.waitForTimeout(500);
           return true;
         } catch {
+          // Try force click
           try {
+            const linkLocator = page.locator(element.selector).first();
+            await linkLocator.scrollIntoViewIfNeeded();
             await linkLocator.click({ timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT, force: true });
             await navigationPromise;
             await page.waitForTimeout(500);
             return true;
           } catch {
-            // Last resort: try direct navigation
-            try {
-              await page.goto(element.href!, { waitUntil: 'domcontentloaded', timeout: 5000 });
-              return true;
-            } catch {
-              return false;
-            }
+            // Try next strategy
           }
         }
       }
-    } catch {
+
+      // Strategy 5: Last resort - direct navigation (if href is available)
+      if (element.href) {
+        try {
+          const targetUrl = new URL(element.href, page.url());
+          const currentUrl = new URL(page.url());
+          
+          // Only navigate if it's a different path
+          if (targetUrl.pathname !== currentUrl.pathname || targetUrl.search !== currentUrl.search) {
+            await page.goto(element.href, { waitUntil: 'domcontentloaded', timeout: 10000 });
+            await page.waitForTimeout(500);
+            return true;
+          }
+        } catch {
+          // Navigation failed
+        }
+      }
+
+      return false;
+    } catch (error: any) {
+      console.log(`   ⚠️  Link click error: ${error.message}`);
       return false;
     }
   }
@@ -206,65 +342,130 @@ export class InteractionHandler {
    */
   private static async clickButton(page: Page, element: InteractiveElement): Promise<boolean> {
     try {
+      // Remove blocking overlays proactively
+      await this.removeBlockingOverlays(page);
+
       const navigationPromise = page.waitForLoadState('domcontentloaded', { timeout: PLANNER_CONFIG.NAVIGATION_WAIT_TIMEOUT }).catch(() => {});
 
+      // Strategy 1: Try by text with getByRole (if text available)
       if (element.text && element.text.trim().length > 0) {
-        const button = page.getByRole('button', { name: element.text });
-        await button.waitFor({ state: 'visible', timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT }).catch(() => {});
-        await button.scrollIntoViewIfNeeded();
-        await button.click({ timeout: PLANNER_CONFIG.CLICK_TIMEOUT, force: false });
-        await navigationPromise;
-        await page.waitForTimeout(500);
-        return true;
-      } else if ((element as any).shadowPath) {
-        const clicked = await page.evaluate((args: { shadowPath: string; selector: string }) => {
-          const parts = args.shadowPath.split(' > ');
-          let root: any = document;
-          for (const part of parts) {
-            const el = root.querySelector(part);
-            if (el && el.shadowRoot) {
-              root = el.shadowRoot;
-            } else {
-              return false;
-            }
+        try {
+          const button = page.getByRole('button', { name: element.text.trim() });
+          await button.waitFor({ state: 'visible', timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT });
+          await button.scrollIntoViewIfNeeded();
+          
+          // Check if clickable
+          const isClickable = await button.evaluate((el) => {
+            const rect = el.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const elementAtPoint = document.elementFromPoint(centerX, centerY);
+            return elementAtPoint === el || el.contains(elementAtPoint);
+          });
+
+          if (!isClickable) {
+            await this.removeBlockingOverlays(page);
           }
-          const button = root.querySelector(args.selector);
-          if (button) {
-            button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            button.click();
-            return true;
-          }
-          return false;
-        }, { shadowPath: (element as any).shadowPath, selector: element.selector });
-        
-        if (clicked) {
+
+          await button.click({ timeout: PLANNER_CONFIG.CLICK_TIMEOUT, force: false });
           await navigationPromise;
           await page.waitForTimeout(500);
           return true;
+        } catch {
+          // Try force click
+          try {
+            const button = page.getByRole('button', { name: element.text.trim() });
+            await button.scrollIntoViewIfNeeded();
+            await button.click({ timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT, force: true });
+            await navigationPromise;
+            await page.waitForTimeout(500);
+            return true;
+          } catch {
+            // Try next strategy
+          }
         }
-        return false;
-      } else {
-        const buttonLocator = element.selector.startsWith('#')
-          ? page.locator(element.selector)
-          : page.locator(element.selector).first();
-        
-        await buttonLocator.waitFor({ state: 'visible', timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT }).catch(() => {});
-        await buttonLocator.scrollIntoViewIfNeeded();
-        await buttonLocator.click({ timeout: PLANNER_CONFIG.CLICK_TIMEOUT, force: false });
-        await navigationPromise;
-        await page.waitForTimeout(500);
-        return true;
       }
-    } catch {
-      // Try force click as last resort
-      try {
-        if (element.selector) {
-          await page.locator(element.selector).first().click({ timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT, force: true });
+
+      // Strategy 2: Try shadow DOM (if shadowPath available)
+      if ((element as any).shadowPath) {
+        try {
+          const clicked = await page.evaluate((args: { shadowPath: string; selector: string }) => {
+            const parts = args.shadowPath.split(' > ');
+            let root: any = document;
+            for (const part of parts) {
+              const el = root.querySelector(part);
+              if (el && el.shadowRoot) {
+                root = el.shadowRoot;
+              } else {
+                return false;
+              }
+            }
+            const button = root.querySelector(args.selector);
+            if (button) {
+              button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              button.click();
+              return true;
+            }
+            return false;
+          }, { shadowPath: (element as any).shadowPath, selector: element.selector });
+          
+          if (clicked) {
+            await navigationPromise;
+            await page.waitForTimeout(500);
+            return true;
+          }
+        } catch {
+          // Try next strategy
+        }
+      }
+
+      // Strategy 3: Try by selector
+      if (element.selector && element.selector.length > 0) {
+        try {
+          const buttonLocator = element.selector.startsWith('#')
+            ? page.locator(element.selector)
+            : page.locator(element.selector).first();
+          
+          await buttonLocator.waitFor({ state: 'visible', timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT });
+          await buttonLocator.scrollIntoViewIfNeeded();
+          
+          // Check if clickable
+          const isClickable = await buttonLocator.evaluate((el) => {
+            const rect = el.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const elementAtPoint = document.elementFromPoint(centerX, centerY);
+            return elementAtPoint === el || el.contains(elementAtPoint);
+          });
+
+          if (!isClickable) {
+            await this.removeBlockingOverlays(page);
+          }
+
+          await buttonLocator.click({ timeout: PLANNER_CONFIG.CLICK_TIMEOUT, force: false });
+          await navigationPromise;
+          await page.waitForTimeout(500);
           return true;
+        } catch {
+          // Try force click
+          try {
+            const buttonLocator = element.selector.startsWith('#')
+              ? page.locator(element.selector)
+              : page.locator(element.selector).first();
+            await buttonLocator.scrollIntoViewIfNeeded();
+            await buttonLocator.click({ timeout: PLANNER_CONFIG.ELEMENT_WAIT_TIMEOUT, force: true });
+            await navigationPromise;
+            await page.waitForTimeout(500);
+            return true;
+          } catch {
+            // All strategies failed
+          }
         }
-      } catch {
-        return false;
       }
+
+      return false;
+    } catch (error: any) {
+      console.log(`   ⚠️  Button click error: ${error.message}`);
       return false;
     }
   }

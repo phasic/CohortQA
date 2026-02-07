@@ -14,6 +14,17 @@ export default function GeneratorPage() {
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
   
   // Settings overrides - separate for each component
   const [settings, setSettings] = useState({
@@ -68,7 +79,33 @@ export default function GeneratorPage() {
     setLoading(true);
     setError(null);
     setResult(null);
-    setLogs(['🚀 Starting test generation...', `📄 Test plan length: ${testPlan.length} characters`, `🌐 Base URL: ${baseUrl}`]);
+    setLogs([]);
+
+    // Generate unique stream ID
+    const streamId = `generator_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Connect to SSE log stream (use same base as API service)
+    const eventSource = new EventSource(
+      `/api/logs/stream?streamId=${streamId}&operation=generator`
+    );
+
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.message) {
+          setLogs(prev => [...prev, data.message]);
+        }
+      } catch (err) {
+        console.error('Failed to parse SSE message:', err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('SSE error:', err);
+      eventSource.close();
+    };
 
     abortControllerRef.current = new AbortController();
 
@@ -76,6 +113,7 @@ export default function GeneratorPage() {
       const response = await api.post('/generator/run', {
         testPlan,
         baseUrl,
+        streamId,
         settings: {
           useAI: settings.generator.useAI,
           aiProvider: settings.generator.aiProvider,
@@ -84,7 +122,6 @@ export default function GeneratorPage() {
       }, {
         signal: abortControllerRef.current.signal,
       });
-      setLogs(prev => [...prev, `✅ Generated ${response.data.files || 0} test file(s)`, `📁 Directory: ${response.data.directory || 'N/A'}`]);
       setResult(response.data.message || 'Tests generated successfully!');
     } catch (err: any) {
       if (err.name === 'CanceledError' || err.message === 'canceled') {
@@ -97,6 +134,10 @@ export default function GeneratorPage() {
     } finally {
       setLoading(false);
       abortControllerRef.current = null;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     }
   };
 
@@ -105,6 +146,10 @@ export default function GeneratorPage() {
       abortControllerRef.current.abort();
       setLoading(false);
       setLogs(prev => [...prev, '⏹️ Stopping generation...']);
+    }
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
   };
 
@@ -232,11 +277,6 @@ export default function GeneratorPage() {
                 </div>
               )}
             </form>
-
-            {/* Log Output */}
-            <div className="mt-6">
-              <LogOutput logs={logs} title="Generator Logs" />
-            </div>
           </div>
         </div>
 
@@ -244,6 +284,11 @@ export default function GeneratorPage() {
         <div className="lg:col-span-1">
           <SettingsPanel settings={settings} onChange={setSettings} component="generator" />
         </div>
+      </div>
+
+      {/* Log Output - Full width below grid, collapsed by default */}
+      <div className="mt-6 w-full">
+        <LogOutput logs={logs} title="Generator Logs" />
       </div>
     </div>
   );
