@@ -536,6 +536,13 @@ npm run build
 
 The built files will be in `frontend/dist/` and can be served with any static file server.
 
+## Documentation
+
+Comprehensive documentation is available in the [`docs/`](./docs/) folder:
+
+- **[Architecture](./docs/ARCHITECTURE.md)**: Complete system architecture, modules, AI components, and data flow
+- **[Planner Decision Tree](./docs/planner-decision-tree.md)**: Detailed decision-making process for element selection, including flowcharts and sequence diagrams
+
 ## References
 
 - [Playwright Test Agents Documentation](https://playwright.dev/docs/test-agents)

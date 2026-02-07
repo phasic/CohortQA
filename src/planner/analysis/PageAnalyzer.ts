@@ -7,13 +7,10 @@ import { PageInfo } from '../types.js';
 export class PageAnalyzer {
   /**
    * Analyzes a page and returns structured information
+   * Note: Assumes page is already loaded and ready (use PageLoader first)
    */
   static async analyzePage(page: Page): Promise<PageInfo> {
-    // Wait a bit for page to be ready
-    await page.waitForLoadState('domcontentloaded').catch(() => {});
-    await page.waitForTimeout(1000);
-    
-    // First verify we can evaluate the page
+    // Verify we can evaluate the page (safety check only)
     try {
       const canEvaluate = await page.evaluate(() => {
         return {
@@ -24,7 +21,16 @@ export class PageAnalyzer {
       
       if (!canEvaluate.bodyExists) {
         console.log(`   ⚠️  PageAnalyzer: Body does not exist yet`);
-        await page.waitForTimeout(2000);
+        // Return empty result if body doesn't exist
+        return {
+          title: '',
+          url: page.url(),
+          buttons: [],
+          inputs: [],
+          links: [],
+          forms: [],
+          headings: []
+        };
       }
     } catch (err: any) {
       console.log(`   ❌ PageAnalyzer: Cannot evaluate page - ${err.message}`);
