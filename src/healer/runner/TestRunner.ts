@@ -14,13 +14,15 @@ export class TestRunner {
   /**
    * Runs tests and returns results
    */
-  static async runTests(testFile?: string): Promise<TestResult> {
+  static async runTests(testFile?: string, headless: boolean = false): Promise<TestResult> {
     try {
-      // Use local playwright binary and run with --headed so browser is visible
+      // Use local playwright binary
+      // Playwright runs headless by default, use --headed to show browser
       const playwrightBin = './node_modules/.bin/playwright';
+      const headlessFlag = headless ? '' : '--headed';
       const testCommand = testFile
-        ? `${playwrightBin} test ${testFile} --reporter=json --headed`
-        : `${playwrightBin} test --reporter=json --headed`;
+        ? `${playwrightBin} test ${testFile} --reporter=json ${headlessFlag}`.trim()
+        : `${playwrightBin} test --reporter=json ${headlessFlag}`.trim();
 
       const { stdout, stderr } = await execAsync(testCommand);
 

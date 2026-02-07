@@ -70,7 +70,7 @@ export abstract class AIClient {
    * Builds the prompt for element selection
    */
   protected buildPrompt(context: PageContext): string {
-    return PromptBuilder.buildElementSelectionPrompt(context, 12, this.personality as any);
+    return PromptBuilder.buildElementSelectionPrompt(context, 12, this.personality);
   }
 }
 

@@ -93,7 +93,6 @@ export class Planner {
   ): Promise<TestPlan> {
     this.abortSignal = abortSignal || null;
     this.personality = personality || 'playful';
-    console.log(`🎭 Planner.explore() received personality: "${this.personality}"`);
     // Initialize exploration state
     this.initializeExplorationState(url, maxNavigations);
 
@@ -112,14 +111,6 @@ export class Planner {
       } else {
         console.log('ℹ️  Using default personality (playful)');
       }
-    }
-
-    // Recreate TTS with personality now that it's set
-    // This ensures the personality is used for TTS prefixes
-    if (enableTTS) {
-      console.log(`🔄 Recreating TTS with personality: ${this.personality}`);
-      this.tts = new TTS(true, this.personality as any);
-      console.log(`✅ TTS recreated with personality: ${this.personality}`);
     }
 
     // Create fresh page context for this exploration
@@ -171,15 +162,8 @@ export class Planner {
         // Recreate DecisionMaker if personality is available but wasn't used
         this.decisionMaker = new DecisionMaker(this.personality);
         console.log('🔄 Updated DecisionMaker with personality');
-      } else if (enableTTS) {
-        // Always recreate TTS if personality might have changed
-        // Check if we need to recreate TTS (if it doesn't exist or personality changed)
-        if (!this.tts || (this.personality && this.tts.getPersonality() !== this.personality)) {
-          this.tts = new TTS(true, this.personality as any);
-          if (this.personality) {
-            console.log(`🔄 Recreated TTS with personality: ${this.personality}`);
-          }
-        }
+      } else if (enableTTS && !this.tts) {
+        this.tts = new TTS(true, this.personality as any);
       }
       // Update headless setting if changed
       if (headless !== this.headless) {

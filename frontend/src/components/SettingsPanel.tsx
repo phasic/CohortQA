@@ -7,7 +7,7 @@ interface ComponentSettings {
   useAI: boolean;
   aiProvider: string;
   aiModel: string;
-  headless?: boolean; // Only for planner
+  headless?: boolean; // For planner and healer
 }
 
 interface SettingsData {
@@ -186,8 +186,8 @@ export default function SettingsPanel({
             )}
           </div>
 
-          {/* Browser Settings - Only for Planner */}
-          {component === 'planner' && (
+          {/* Browser Settings - For Planner and Healer */}
+          {(component === 'planner' || component === 'healer') && (
             <div>
               <div className="mb-2">
                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
@@ -197,7 +197,7 @@ export default function SettingsPanel({
               <label className="flex items-center mb-2">
                 <input
                   type="checkbox"
-                  checked={settings.planner.headless || false}
+                  checked={settings[component].headless || false}
                   onChange={(e) => updateComponentSetting('headless', e.target.checked)}
                   className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />

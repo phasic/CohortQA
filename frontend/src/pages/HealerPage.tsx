@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import SettingsPanel from '../components/SettingsPanel';
 import LogOutput from '../components/LogOutput';
+import FileBrowser from '../components/FileBrowser';
+import DiffViewer from '../components/DiffViewer';
+import CodeViewer from '../components/CodeViewer';
 import { Wrench, Play, FolderOpen, Square } from 'lucide-react';
 import { DEFAULT_PROMPTS } from '../constants/defaultPrompts';
 
@@ -50,6 +53,7 @@ export default function HealerPage() {
       useAI: true,
       aiProvider: 'ollama',
       aiModel: 'mistral',
+      headless: false,
     },
     tts: {
       useTTS: false,
@@ -120,6 +124,7 @@ export default function HealerPage() {
           useAI: settings.healer.useAI,
           aiProvider: settings.healer.aiProvider,
           aiModel: settings.healer.aiModel,
+          headless: settings.healer.headless || false,
         },
       }, {
         signal: abortControllerRef.current.signal,
@@ -180,8 +185,9 @@ export default function HealerPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main content */}
+      {/* Top row: Test Suites and Settings side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* Test Suites Selector */}
         <div className="lg:col-span-2">
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
             <div className="flex justify-between items-center mb-4">
@@ -286,56 +292,7 @@ export default function HealerPage() {
           </div>
         </div>
 
-        {/* File Browser and Diff Viewer */}
-        {selectedSuite && (
-          <div className="lg:col-span-2 mt-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* File Browser */}
-              <div>
-                <FileBrowser
-                  basePath={selectedSuite}
-                  onFileSelect={(file) => {
-                    setSelectedFile(file);
-                    // Check if we have a diff for this file
-                    const diff = fileDiffs.get(file.path);
-                    if (diff) {
-                      setSelectedFile({ ...file, diff });
-                    }
-                  }}
-                />
-              </div>
-
-              {/* File Content / Diff Viewer */}
-              <div>
-                {selectedFile?.diff ? (
-                  <DiffViewer
-                    original={selectedFile.diff.original}
-                    modified={selectedFile.diff.modified}
-                    fileName={selectedFile.name}
-                  />
-                ) : selectedFile?.content ? (
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                    <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center">
-                      <FileCode className="w-4 h-4 mr-2 text-gray-500" />
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {selectedFile.name}
-                      </h4>
-                    </div>
-                    <div className="font-mono text-xs max-h-96 overflow-y-auto bg-gray-900 text-green-400 p-4">
-                      <pre className="whitespace-pre-wrap">{selectedFile.content}</pre>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center text-gray-500">
-                    Select a file to view its content
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Settings Panel */}
+        {/* Settings Panel - Top Right */}
         <div className="lg:col-span-1">
           <SettingsPanel 
             settings={settings} 
@@ -344,6 +301,46 @@ export default function HealerPage() {
           />
         </div>
       </div>
+
+      {/* File Browser and Diff Viewer - Below top row */}
+      {selectedSuite && (
+        <div className="mb-6 space-y-6">
+          {/* File Browser */}
+          <div>
+            <FileBrowser
+              basePath={selectedSuite}
+              onFileSelect={(file) => {
+                setSelectedFile(file);
+                // Check if we have a diff for this file
+                const diff = fileDiffs.get(file.path);
+                if (diff) {
+                  setSelectedFile({ ...file, diff });
+                }
+              }}
+            />
+          </div>
+
+          {/* File Content / Diff Viewer - Full Width */}
+          <div>
+            {selectedFile?.diff ? (
+              <DiffViewer
+                original={selectedFile.diff.original}
+                modified={selectedFile.diff.modified}
+                fileName={selectedFile.name}
+              />
+            ) : selectedFile?.content ? (
+              <CodeViewer
+                content={selectedFile.content}
+                fileName={selectedFile.name}
+              />
+            ) : (
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center text-gray-500">
+                Select a file to view its content
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Log Output - Full width below grid, collapsed by default */}
       <div className="mt-6 w-full">

@@ -13,20 +13,23 @@ import { AnsiCodeStripper } from './utils/AnsiCodeStripper.js';
 export class Healer {
   private browser: Browser | null = null;
   private page: Page | null = null;
-  constructor() {
+  private headless: boolean = false;
+
+  constructor(headless: boolean = false) {
+    this.headless = headless;
   }
 
   async initialize() {
     // Note: The healer doesn't actually use this browser instance
     // Tests are run via Playwright's test runner which creates its own browsers
     // This is kept for potential future use or debugging
-    this.browser = await chromium.launch({ headless: false });
+    this.browser = await chromium.launch({ headless: this.headless });
     const context = await this.browser.newContext();
     this.page = await context.newPage();
   }
 
   async runTests(testFile?: string): Promise<TestResult> {
-    return TestRunner.runTests(testFile);
+    return TestRunner.runTests(testFile, this.headless);
   }
 
   async healTest(testFile: string, failure: TestFailure): Promise<HealResult> {

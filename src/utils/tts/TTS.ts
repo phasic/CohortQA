@@ -21,20 +21,15 @@ export class TTS {
   private openaiProvider: OpenAIProvider | null = null;
   private piperProvider: PiperProvider | null = null;
   private prefixGenerator: PrefixGenerator;
-  private personality?: PersonalityType;
 
   constructor(
     enabled: boolean = false, 
     personality?: PersonalityType
   ) {
     this.enabled = enabled;
-    this.personality = personality;
     
     // Pass personality directly to PrefixGenerator
-    // If personality changed, PrefixGenerator will clear its cache
     this.prefixGenerator = new PrefixGenerator(personality);
-    
-    console.log(`🎭 TTS initialized with personality: ${personality || 'playful'}`);
     
     // Start detecting provider in background (non-blocking)
     this.detectAndInitializeProvider().catch(() => {
@@ -93,13 +88,9 @@ export class TTS {
       let speechText = text;
       
       if (personality !== 'thinking') {
-        console.log(`🎭 TTS.speak: personality=${personality}, TTS.personality=${this.personality || 'playful'}, text="${text.substring(0, 30)}..."`);
         const prefix = await this.prefixGenerator.generatePrefix(personality, text);
         if (prefix) {
           speechText = `${prefix} ${text}`;
-          console.log(`🎭 Final speech text: "${speechText.substring(0, 50)}..."`);
-        } else {
-          console.warn(`⚠️  No prefix generated for personality=${personality}`);
         }
       }
 
@@ -343,13 +334,6 @@ export class TTS {
       // If not a shortcut, assume it's a full path
       this.setPiperModel(voiceName);
     }
-  }
-
-  /**
-   * Gets the current personality
-   */
-  getPersonality(): PersonalityType | undefined {
-    return this.personality;
   }
 }
 

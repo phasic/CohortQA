@@ -4,6 +4,12 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  optimizeDeps: {
+    include: ['react-syntax-highlighter', 'react-syntax-highlighter/dist/esm/styles/prism'],
+    esbuildOptions: {
+      target: 'esnext',
+    },
+  },
   plugins: [
     react(),
     VitePWA({

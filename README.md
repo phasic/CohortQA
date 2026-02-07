@@ -438,36 +438,9 @@ To use Ollama (local, free):
 2. Pull Mistral model: `ollama pull mistral`
 3. Configure in `config.yaml` or use defaults
 
-## Personality System
-
-Cohort QA includes a personality system that influences both AI decision-making and TTS speech patterns. You can select from 8 different personalities:
-
-- **Playful**: Fun, lighthearted, and curious (default)
-- **Sarcastic**: Witty, ironic, and slightly mocking
-- **Annoyed**: Impatient, frustrated, and grumpy
-- **Professional**: Formal, business-like, and efficient
-- **Excited**: Enthusiastic, energetic, and upbeat
-- **Curious**: Inquisitive, thoughtful, and exploratory
-- **Skeptical**: Doubtful, questioning, and cautious
-- **Enthusiastic**: Eager, positive, and optimistic
-
-### How It Works
-
-1. **Personality Flow**: Frontend → API → Planner → TTS → PrefixGenerator
-2. **AI Decision-Making**: The selected personality influences how the AI selects elements and makes decisions
-3. **TTS Speech Patterns**: The personality affects the prefixes and phrases used in text-to-speech (e.g., "Ugh," for annoyed, "Oh great," for sarcastic)
-4. **Initialization**: TTS is recreated in `Planner.explore()` after personality is set to ensure correct initialization
-
-### Usage
-
-In the frontend, select a personality from the dropdown in the Settings panel. The personality affects:
-- How the AI reasons about which elements to click
-- The tone and style of TTS speech
-- The prefixes and phrases used when speaking
-
 ## Text-to-Speech (TTS)
 
-The planner can speak its thoughts and actions using text-to-speech, making it feel like the AI is thinking out loud! The speech patterns are influenced by the selected personality.
+The planner can speak its thoughts and actions using text-to-speech, making it feel like the AI is thinking out loud!
 
 ### TTS Providers (Automatic Selection)
 
@@ -510,11 +483,12 @@ curl -L -o en_US-amy-medium.onnx.json \
 # With TTS enabled
 npm start -- plan -u https://example.com --ai --tts
 
-# The AI will speak (personality-dependent):
-# - Playful: "Oh! Found 35 interactive elements on example.com"
-# - Annoyed: "Ugh, 35 elements found. Let me pick one..."
-# - Sarcastic: "Oh great, 35 elements. Let's see which one..."
-# - The personality affects both the AI's decision-making and TTS speech patterns
+# The AI will speak:
+# - "AI assistant activated. Ready to explore!"
+# - "Found 35 interactive elements on example.com"
+# - "Let me analyze these elements and pick the best one..."
+# - "I'll click on 'Investing'. This link leads to investment products..."
+# - "Alright, clicking on the link now..."
 ```
 
 ### Voice Quality
@@ -551,7 +525,7 @@ Then open http://localhost:3000 in your browser.
   - Headless mode toggle (run browser in background)
   - Real-time log streaming from backend operations
   - System prompt editor for planner AI
-  - Personality selection dropdown (8 personality options)
+  - TTS prompt editors (prefix, thinking, personality descriptions)
   - Force stop button (immediately cancels running operations)
 - **Generator Page**: View and edit test plans, generate Playwright tests
   - Real-time log streaming from backend operations
@@ -568,10 +542,7 @@ Then open http://localhost:3000 in your browser.
   - TTS settings (planner only): provider and voice selection
 - **Personality Selection**: Choose AI personality to influence behavior and TTS responses
   - Available personalities: playful, sarcastic, annoyed, professional, excited, curious, skeptical, enthusiastic
-  - Personality affects AI decision-making and TTS speech patterns
-  - 8 personality options: playful, sarcastic, annoyed, professional, excited, curious, skeptical, enthusiastic
-  - Personality is passed through the entire system: Frontend → API → Planner → TTS → PrefixGenerator
-  - TTS is recreated with correct personality after initialization to ensure proper behavior
+  - Personality affects AI decision-making and TTS voice style
   - Visual indicator shows selected personality
 - **Real-time Log Streaming**: All backend operations stream logs to the frontend via Server-Sent Events (SSE)
   - Terminal-like log output component

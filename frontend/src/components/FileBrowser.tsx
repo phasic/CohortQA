@@ -17,6 +17,7 @@ interface FileBrowserProps {
 export default function FileBrowser({ basePath, onFileSelect }: FileBrowserProps) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
 
@@ -25,13 +26,27 @@ export default function FileBrowser({ basePath, onFileSelect }: FileBrowserProps
   }, [basePath]);
 
   const loadFiles = async () => {
-    if (!basePath) return;
+    if (!basePath) {
+      setError('No path provided');
+      return;
+    }
     setLoading(true);
+    setError(null);
     try {
+      console.log('Loading files from path:', basePath);
       const response = await api.get(`/healer/files?path=${encodeURIComponent(basePath)}`);
-      setFiles(response.data.files || []);
-    } catch (err) {
+      console.log('Files response:', response.data);
+      const fileList = response.data.files || [];
+      setFiles(fileList);
+      if (fileList.length === 0) {
+        setError('No files found in this directory');
+      }
+    } catch (err: any) {
       console.error('Failed to load files:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to load files';
+      console.error('Error details:', errorMessage);
+      setError(errorMessage);
+      setFiles([]);
     } finally {
       setLoading(false);
     }
@@ -114,7 +129,33 @@ export default function FileBrowser({ basePath, onFileSelect }: FileBrowserProps
   };
 
   if (loading) {
-    return <div className="text-center py-4 text-gray-500">Loading files...</div>;
+    return (
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Files</h4>
+        </div>
+        <div className="text-center py-4 text-gray-500">Loading files...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Files</h4>
+        </div>
+        <div className="p-4">
+          <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
+          <button
+            onClick={loadFiles}
+            className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -123,7 +164,15 @@ export default function FileBrowser({ basePath, onFileSelect }: FileBrowserProps
         <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Files</h4>
       </div>
       <div className="max-h-96 overflow-y-auto">
-        {files.filter(f => !f.path.includes('/') || f.path.split('/').length === 1).map(file => renderFile(file))}
+        {files.length === 0 ? (
+          <div className="text-center py-4 text-gray-500">No files found</div>
+        ) : (
+          files.filter(f => {
+            // Show only root-level files (files directly in basePath)
+            const relativePath = f.path.replace(basePath + '/', '').replace(basePath, '');
+            return !relativePath.includes('/');
+          }).map(file => renderFile(file))
+        )}
       </div>
     </div>
   );

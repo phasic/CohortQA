@@ -211,9 +211,6 @@ app.post('/api/planner/run', async (req, res) => {
   try {
       const { url, maxNavigations, ignoredTags, settings, streamId: _streamId, personality } = req.body;
 
-    console.log(`🎭 API received personality from frontend: "${personality}" (type: ${typeof personality})`);
-    console.log(`🎭 Full request body keys:`, Object.keys(req.body));
-
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });
     }
@@ -269,18 +266,16 @@ app.post('/api/planner/run', async (req, res) => {
       console.log('🌐 Starting exploration...');
       // Run the exploration - this is a long-running operation
       // Pass abort signal so planner can be cancelled
-      const finalPersonality = personality || 'playful';
-      console.log(`🎭 API: Passing personality "${finalPersonality}" to planner.explore()`);
-      const plan = await planner.explore(
-        url,
-        seedPath,
-        maxNavigations || 3,
-        settings?.useAI || false,
-        settings?.useTTS || false,
-        settings?.headless || false,
-        abortController.signal,
-        finalPersonality
-      );
+          const plan = await planner.explore(
+            url,
+            seedPath,
+            maxNavigations || 3,
+            settings?.useAI || false,
+            settings?.useTTS || false,
+            settings?.headless || false,
+            abortController.signal,
+            personality || 'playful'
+          );
 
       console.log(`✅ Exploration complete! Generated ${plan.scenarios.length} scenarios`);
       await planner.saveMarkdown(plan, 'specs/test-plan.md');
@@ -507,7 +502,8 @@ app.post('/api/healer/run', async (req, res) => {
       process.env.HEALER_AI_MODEL = settings.aiModel;
     }
 
-    const healer = new Healer();
+    const headless = settings?.headless || false;
+    const healer = new Healer(headless);
     await healer.initialize();
 
     // Store original file contents for diff generation
@@ -577,6 +573,19 @@ app.get('/api/healer/files', async (req, res) => {
       return res.status(400).json({ error: 'Path is required' });
     }
 
+    console.log(`📁 Listing files in: ${dirPath}`);
+    
+    // Check if path exists
+    try {
+      const stats = await fs.stat(dirPath);
+      if (!stats.isDirectory()) {
+        return res.status(400).json({ error: 'Path is not a directory' });
+      }
+    } catch (statError: any) {
+      console.error(`❌ Path does not exist or is not accessible: ${dirPath}`, statError.message);
+      return res.status(404).json({ error: `Directory not found: ${statError.message}` });
+    }
+
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     const files = entries.map(entry => ({
       name: entry.name,
@@ -584,8 +593,10 @@ app.get('/api/healer/files', async (req, res) => {
       type: entry.isDirectory() ? 'directory' as const : 'file' as const,
     }));
 
+    console.log(`✅ Found ${files.length} items in ${dirPath}`);
     res.json({ files });
   } catch (error: any) {
+    console.error(`❌ Error listing files in ${req.query.path}:`, error.message);
     res.status(500).json({ error: error.message || 'Failed to list files' });
   }
 });
