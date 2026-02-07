@@ -507,7 +507,7 @@ A standalone Progressive Web App (PWA) built with React, TypeScript, Vite, and T
   - URL input, max navigations, ignored tags configuration
   - Settings panel: AI provider/model, TTS provider/voice, headless mode
   - System prompt editor for planner AI
-  - TTS prompt editors (prefix, thinking, personality descriptions)
+  - Personality selection dropdown (8 personality options)
   - Real-time log output via SSE
   - Force stop capability (calls `/api/planner/stop` endpoint)
 
@@ -629,7 +629,7 @@ ai:
 
 ### 2. PrefixGenerator (`src/utils/tts/ai/PrefixGenerator.ts`)
 
-**Purpose**: Generates dynamic, personality-driven prefixes for TTS speech (e.g., "Oh!", "Hmm,", "Let me try").
+**Purpose**: Generates dynamic, personality-driven prefixes for TTS speech (e.g., "Oh!", "Ugh,", "Seriously?").
 
 **Used By**: TTS module
 
@@ -642,17 +642,28 @@ ai:
   - Model: `mistral`
 
 **Input**:
-- Personality type: `realizing`, `deciding`, `acting`
+- User-selected personality: `playful | sarcastic | annoyed | professional | excited | curious | skeptical | enthusiastic`
+- TTS personality type: `realizing`, `deciding`, `acting`
 - Context text (what the AI is about to say)
 
 **Output**:
-- Dynamic prefix (e.g., "Oh!", "Hmm,", "Let me try", "I think")
+- Dynamic prefix matching the selected personality (e.g., "Ugh," for annoyed, "Oh great," for sarcastic, "Oh!" for playful)
+
+**Personality System**:
+- Personality is passed from frontend → API → Planner → TTS → PrefixGenerator
+- TTS is recreated in `Planner.explore()` after personality is set to ensure correct initialization
+- Each personality has specific prompt templates and examples
+- Prompts explicitly emphasize the selected personality with examples
 
 **Fallback**:
-- If AI unavailable → Uses hardcoded fallback prefixes from `config.yaml`
+- If AI unavailable → Uses personality-aware fallback prefixes
+- Fallback prefixes are personality-specific (e.g., "Ugh,", "Seriously?" for annoyed; "Oh great," for sarcastic)
+- Falls back to playful defaults if personality-specific fallbacks unavailable
 
 **Caching**:
 - Uses `PrefixCache` to cache AI-generated prefixes
+- Cache key includes both user-selected personality and TTS personality type
+- Cache is cleared when personality changes to prevent mixing personalities
 - Reduces API calls for similar contexts
 
 **Configuration**:
@@ -926,6 +937,8 @@ tts:
 
 4. **TTS Prefix Generation** (when `--tts` flag enabled):
    - When TTS needs to speak with personality
+   - TTS is recreated in `Planner.explore()` after personality is set to ensure correct initialization
+   - Personality flows: Frontend → API → Planner → TTS → PrefixGenerator
    - Generates prefixes like "Oh!", "Hmm,", "Let me try"
    - Cached to reduce API calls
 
@@ -1075,7 +1088,7 @@ src/
 - **Planner**: Uses AI (Ollama/OpenAI/Anthropic) for smart element selection, falls back to heuristics. Supports headless mode for background execution.
 - **Generator**: Uses AI (Ollama/OpenAI/Anthropic) for intelligent test code generation, falls back to heuristics
 - **Healer**: Uses AI (Ollama/OpenAI/Anthropic) for intelligent test fixing with best selectors, falls back to heuristic fixers
-- **TTS**: Uses AI for prefix generation, dedicated APIs for speech synthesis. Supports OpenAI, Piper, and macOS providers with customizable voices and personality descriptions.
+- **TTS**: Uses AI for prefix generation, dedicated APIs for speech synthesis. Supports OpenAI, Piper, and macOS providers with customizable voices. Personality system allows selection of 8 different personalities (playful, sarcastic, annoyed, professional, excited, curious, skeptical, enthusiastic) that influence both AI decision-making and TTS speech patterns. TTS is recreated in `Planner.explore()` after personality is set to ensure correct initialization.
 - **API Server**: REST API + Server-Sent Events (SSE) for real-time log streaming to frontend. Includes dedicated stop endpoints for operation cancellation.
 - **Frontend PWA**: React-based Progressive Web App with real-time log output, settings override, personality selection, and force stop capabilities
 - **Configuration**: Centralized in `config.yaml` with environment variable overrides. Frontend can override settings per operation.
