@@ -61,22 +61,22 @@ This document provides a comprehensive overview of the Cohort QA system architec
     │   Planner   │   │  Generator   │   │   Healer     │   │  Interactive │
     │             │   │              │   │              │   │     Mode     │
     └──────┬──────┘   └──────┬───────┘   └──────┬───────┘   └──────────────┘
-           │                 │                   │
-           │                 │                   │
-           ▼                 ▼                   ▼
+           │                 │                  │
+           │                 │                  │
+           ▼                 ▼                  ▼
     ┌─────────────────────────────────────────────────────────────┐
     │                    AI System                                │
-    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-    │  │ DecisionMaker│  │TestCodeGenAI │  │TestHealerAI  │       │
-    │  │  (Planner)   │  │ (Generator)  │  │  (Healer)    │       │
-    │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
-    │         │                 │                 │               │
-    │  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐       │
-    │  │PrefixGenerator│  │              │  │              │       │
-    │  │   (TTS)      │  │              │  │              │       │
-    │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
-    │         │                 │                 │               │
-    │         ▼                 ▼                 ▼               │
+    │  ┌──────────────┐  ┌───────────────┐  ┌──────────────┐      │
+    │  │ DecisionMaker│  │TestCodeGenAI  │  │TestHealerAI  │      │
+    │  │  (Planner)   │  │ (Generator)   │  │  (Healer)    │      │
+    │  └──────┬───────┘  └───────┬───────┘  └──────┬───────┘      │
+    │         │                  │                 │              │
+    │  ┌──────┴────────┐  ┌──────┴───────┐  ┌──────┴───────┐      │
+    │  │PrefixGenerator │  │              │  │              │      │
+    │  │   (TTS)       │  │              │  │              │      │
+    │  └──────┬────────┘  └──────┬───────┘  └──────┬───────┘      │
+    │         │                  │                 │              │
+    │         ▼                  ▼                 ▼              │
     │  ┌────────────────────────────────────────────────────┐     │
     │  │           AI Provider Factory                      │     │
     │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐          │     │
@@ -94,7 +94,7 @@ This document provides a comprehensive overview of the Cohort QA system architec
            │
            ▼
     ┌─────────────────────────────────────────────────────────────┐
-    │              Configuration System (config.yaml)               │
+    │            Configuration System (config.yaml)                 │
     │  - AI Provider Selection (Planner & TTS)                    │
     │  - Model Selection                                          │
     │  - Voice Selection (TTS)                                    │
