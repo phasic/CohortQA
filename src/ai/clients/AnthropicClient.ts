@@ -21,10 +21,11 @@ export class AnthropicClient extends AIClient {
           model: this.config.model,
           max_tokens: this.config.maxTokens ?? 150,
           temperature: this.config.temperature ?? 0.2,
+          system: prompt, // Anthropic uses 'system' field (includes personality injection and all context)
           messages: [
             {
               role: 'user',
-              content: prompt
+              content: 'Please analyze the elements and respond with JSON.'
             }
           ]
         }),

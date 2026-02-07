@@ -282,9 +282,9 @@ The API server provides a REST API and Server-Sent Events (SSE) interface for th
   - Supports multiple concurrent streams (one per operation)
 
 - **`POST /api/planner/run`** - Execute planner exploration
-  - Body: `{ url, maxNavigations, ignoredTags, settings, streamId, customPrompts }`
+  - Body: `{ url, maxNavigations, ignoredTags, settings, streamId, personality }`
   - Settings: `{ useAI, aiProvider, aiModel, useTTS, ttsProvider, ttsVoice, headless }`
-  - CustomPrompts: `{ planner?, ttsPrefix?, ttsThinking?, ttsPersonalityDescriptions? }`
+  - Personality: `playful | sarcastic | annoyed | professional | excited | curious | skeptical | enthusiastic` (default: `playful`)
   - Returns: `{ success, message, testPlanPath }`
   - Creates an active operation entry that can be stopped via `/api/planner/stop`
 
@@ -295,15 +295,13 @@ The API server provides a REST API and Server-Sent Events (SSE) interface for th
   - Used by frontend "Stop" button to cancel long-running operations
 
 - **`POST /api/generator/run`** - Generate test code from test plan
-  - Body: `{ testPlan, baseUrl, settings, streamId, customPrompts }`
+  - Body: `{ testPlan, baseUrl, settings, streamId }`
   - Settings: `{ useAI, aiProvider, aiModel }`
-  - CustomPrompts: `{ generator? }`
   - Returns: `{ success, message, testSuitePath }`
 
 - **`POST /api/healer/run`** - Heal broken tests
-  - Body: `{ testSuitePath, settings, streamId, customPrompts }`
+  - Body: `{ testSuitePath, settings, streamId }`
   - Settings: `{ useAI, aiProvider, aiModel }`
-  - CustomPrompts: `{ healer? }`
   - Returns: `{ success, message, healedFiles }`
 
 - **`GET /api/generator/test-plan`** - Get latest test plan
@@ -532,21 +530,10 @@ A standalone Progressive Web App (PWA) built with React, TypeScript, Vite, and T
 
 - **`components/SettingsPanel.tsx`** - Reusable settings configuration component
   - AI provider/model selection (dropdowns with provider-specific options)
+  - AI personality selection (dropdown with 8 personality options)
   - TTS provider/voice selection (planner only, dropdowns with provider-specific options)
-  - System prompt editors for each component
-  - TTS prompt editors (prefix, thinking, personality descriptions)
   - Browser settings (headless mode for planner)
-  - Shows indicators when custom prompts are in use
-
-- **`components/PromptEditor.tsx`** - Modal editor for AI system prompts
-  - Large editor (95% screen height) for easy editing
-  - Save/Cancel/Revert to default functionality
-  - Supports all prompt types (planner, generator, healer, TTS)
-
-- **`components/PersonalityEditor.tsx`** - Modal editor for TTS personality descriptions
-  - Edits all four personality types (thinking, realizing, deciding, acting)
-  - Individual textarea for each personality
-  - Save/Cancel/Revert to default functionality
+  - Shows selected personality indicator
 
 - **`components/LogOutput.tsx`** - Terminal-like log display component
   - Collapsible by default, auto-expands when logs arrive
@@ -1090,16 +1077,16 @@ src/
 - **Healer**: Uses AI (Ollama/OpenAI/Anthropic) for intelligent test fixing with best selectors, falls back to heuristic fixers
 - **TTS**: Uses AI for prefix generation, dedicated APIs for speech synthesis. Supports OpenAI, Piper, and macOS providers with customizable voices and personality descriptions.
 - **API Server**: REST API + Server-Sent Events (SSE) for real-time log streaming to frontend. Includes dedicated stop endpoints for operation cancellation.
-- **Frontend PWA**: React-based Progressive Web App with real-time log output, settings override, custom prompt editing, and force stop capabilities
+- **Frontend PWA**: React-based Progressive Web App with real-time log output, settings override, personality selection, and force stop capabilities
 - **Configuration**: Centralized in `config.yaml` with environment variable overrides. Frontend can override settings per operation.
 - **AI Providers**: Each component (Planner, Generator, Healer) can use independent AI providers and models, configurable via frontend dropdowns
 - **Ignored Tags**: Configurable list of HTML tags to exclude from interaction (default: `header`, `aside`, `footer`, `dbs-top-bar`)
 - **Operation Management**: Active operations tracked with abort controllers. Dedicated stop endpoints (`/api/planner/stop`, etc.) for immediate cancellation.
-- **Custom Prompts**: Edit AI system prompts and TTS prompts (prefix, thinking, personality descriptions) per operation via frontend UI
+- **Personality System**: Select AI personality (playful, sarcastic, annoyed, professional, etc.) to influence AI behavior and TTS responses
 
 The system is designed to work with or without AI, gracefully degrading to heuristics when AI is unavailable. All AI components support the `heuristic` provider option to explicitly disable AI and use heuristics only.
 
 **Access Methods:**
 - **CLI**: Direct command-line interface for all operations
-- **Frontend PWA**: Web-based interface with real-time log streaming, settings override, custom prompt editing, and operation management
+- **Frontend PWA**: Web-based interface with real-time log streaming, settings override, personality selection, and operation management
 

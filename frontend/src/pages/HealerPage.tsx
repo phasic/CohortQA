@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import SettingsPanel from '../components/SettingsPanel';
 import LogOutput from '../components/LogOutput';
 import { Wrench, Play, FolderOpen, Square } from 'lucide-react';
+import { DEFAULT_PROMPTS } from '../constants/defaultPrompts';
 
 interface TestSuite {
   name: string;
@@ -56,6 +57,7 @@ export default function HealerPage() {
       ttsVoice: 'nova',
     },
   });
+
 
   useEffect(() => {
     loadTestSuites();
@@ -335,7 +337,11 @@ export default function HealerPage() {
 
         {/* Settings Panel */}
         <div className="lg:col-span-1">
-          <SettingsPanel settings={settings} onChange={setSettings} component="healer" />
+          <SettingsPanel 
+            settings={settings} 
+            onChange={setSettings} 
+            component="healer"
+          />
         </div>
       </div>
 

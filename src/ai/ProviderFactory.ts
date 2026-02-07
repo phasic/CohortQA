@@ -105,7 +105,7 @@ export class ProviderFactory {
   /**
    * Creates an AI client for the specified provider
    */
-  static createClient(provider: AIProvider): AIClient | null {
+  static createClient(provider: AIProvider, personality?: string): AIClient | null {
     // If provider is 'heuristic', return null to disable AI
     if (provider === 'heuristic') {
       return null;
@@ -118,11 +118,11 @@ export class ProviderFactory {
 
     switch (provider) {
       case 'openai':
-        return new OpenAIClient(config);
+        return new OpenAIClient(config, personality);
       case 'anthropic':
-        return new AnthropicClient(config);
+        return new AnthropicClient(config, personality);
       case 'ollama':
-        return new OllamaClient(config);
+        return new OllamaClient(config, personality);
       default:
         return null;
     }

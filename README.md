@@ -539,13 +539,11 @@ Then open http://localhost:3000 in your browser.
 - **Settings Override**: Override global `config.yaml` settings per operation
   - Independent AI provider/model selection for each component
   - Provider-specific dropdowns for AI models and TTS voices
-  - TTS settings (planner only): provider, voice, and prompt customization
-- **Custom Prompt Editing**: Edit AI system prompts and TTS prompts per operation
-  - Planner, Generator, Healer system prompts (large modal editor)
-  - TTS prefix and thinking prompts
-  - TTS personality descriptions (thinking, realizing, deciding, acting)
-  - Revert to default functionality
-  - Visual indicators when custom prompts are in use
+  - TTS settings (planner only): provider and voice selection
+- **Personality Selection**: Choose AI personality to influence behavior and TTS responses
+  - Available personalities: playful, sarcastic, annoyed, professional, excited, curious, skeptical, enthusiastic
+  - Personality affects AI decision-making and TTS voice style
+  - Visual indicator shows selected personality
 - **Real-time Log Streaming**: All backend operations stream logs to the frontend via Server-Sent Events (SSE)
   - Terminal-like log output component
   - Collapsible by default, auto-expands when logs arrive

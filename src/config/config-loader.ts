@@ -123,7 +123,7 @@ export function loadConfig(): Config {
       pageSettleTimeout: yamlConfig.planner?.pageSettleTimeout || 800,
       recentInteractionHistorySize: yamlConfig.planner?.recentInteractionHistorySize || 50,
       maxElementsToShowAI: yamlConfig.planner?.maxElementsToShowAI || 20,
-      ignoredTags: yamlConfig.planner?.ignoredTags || ['header', 'nav', 'aside', 'footer', 'dbs-top-bar'],
+      ignoredTags: yamlConfig.planner?.ignoredTags || ['header', 'aside', 'footer', 'dbs-top-bar'],
     },
     tts: {
       macos: {

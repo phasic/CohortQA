@@ -50,6 +50,7 @@ export default function GeneratorPage() {
     },
   });
 
+
   useEffect(() => {
     loadLatestTestPlan();
   }, []);
@@ -282,7 +283,11 @@ export default function GeneratorPage() {
 
         {/* Settings Panel */}
         <div className="lg:col-span-1">
-          <SettingsPanel settings={settings} onChange={setSettings} component="generator" />
+          <SettingsPanel 
+            settings={settings} 
+            onChange={setSettings} 
+            component="generator"
+          />
         </div>
       </div>
 

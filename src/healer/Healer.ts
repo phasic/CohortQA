@@ -13,6 +13,8 @@ import { AnsiCodeStripper } from './utils/AnsiCodeStripper.js';
 export class Healer {
   private browser: Browser | null = null;
   private page: Page | null = null;
+  constructor() {
+  }
 
   async initialize() {
     // Note: The healer doesn't actually use this browser instance
@@ -57,6 +59,7 @@ export class Healer {
   }
 
   async healAllFailures(testFile?: string, maxIterations: number = 5): Promise<boolean> {
+
     for (let i = 0; i < maxIterations; i++) {
       const result = await this.runTests(testFile);
 

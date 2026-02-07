@@ -7,9 +7,9 @@ The Banking & Insurance for private individuals & business - ING Belgium applica
 
 **Pages Explored:**
 1. Banking & Insurance for private individuals & business - ING Belgium (https://www.ing.be/en/individuals)
-2. When should you give your child a bank card? - ING Belgium (https://www.ing.be/en/individuals/daily-banking/what-is-the-best-age-to-give-a-child-a-bank-card)
-3. Get in touch - ING Belgium (https://www.ing.be/en/individuals/services/get-in-touch)
-4. Not completely satisfied with our services? Contact us! - ING Belgium (https://www.ing.be/en/individuals/services/complaint-handling)
+2. Calculate your Insurance premium - ING Belgium (https://www.ing.be/en/individuals/insurance)
+3. Car insurance - ING Belgium (https://www.ing.be/en/individuals/insurance/insure-my-car/car-insurance)
+4. Accident assistance with ING: what you should do? - ING Belgium (https://www.ing.be/en/individuals/my-life/mobility/car-insurance-claim)
 
 
 ## Test Scenarios
@@ -26,87 +26,87 @@ The Banking & Insurance for private individuals & business - ING Belgium applica
 - Page title is "Banking & Insurance for private individuals & business - ING Belgium"
 - Key elements are visible
 
-### 2. Verify When should you give your child a bank card? - ING Belgium Loads Correctly
+### 2. Verify Calculate your Insurance premium - ING Belgium Loads Correctly
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/daily-banking/what-is-the-best-age-to-give-a-child-a-bank-card
+1. Navigate to https://www.ing.be/en/individuals/insurance
 
 **Expected Results:**
 - Page loads without errors
-- Page title is "When should you give your child a bank card? - ING Belgium"
+- Page title is "Calculate your Insurance premium - ING Belgium"
 - Key elements are visible
 
-### 3. Verify Get in touch - ING Belgium Loads Correctly
+### 3. Verify Car insurance - ING Belgium Loads Correctly
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/services/get-in-touch
+1. Navigate to https://www.ing.be/en/individuals/insurance/insure-my-car/car-insurance
 
 **Expected Results:**
 - Page loads without errors
-- Page title is "Get in touch - ING Belgium"
+- Page title is "Car insurance - ING Belgium"
 - Key elements are visible
 
-### 4. Verify Not completely satisfied with our services? Contact us! - ING Belgium Loads Correctly
+### 4. Verify Accident assistance with ING: what you should do? - ING Belgium Loads Correctly
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/services/complaint-handling
+1. Navigate to https://www.ing.be/en/individuals/my-life/mobility/car-insurance-claim
 
 **Expected Results:**
 - Page loads without errors
-- Page title is "Not completely satisfied with our services? Contact us! - ING Belgium"
+- Page title is "Accident assistance with ING: what you should do? - ING Belgium"
 - Key elements are visible
 
-### 5. Navigate from Banking & Insurance for private individuals & business - ING Belgium to When should you give your child a bank card? - ING Belgium
+### 5. Navigate from Banking & Insurance for private individuals & business - ING Belgium to Calculate your Insurance premium - ING Belgium
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
 1. Navigate to https://www.ing.be/en/individuals
-2. Click on the "link" link that navigates to When should you give your child a bank card? - ING Belgium
+2. Click on the "link" link that navigates to Calculate your Insurance premium - ING Belgium
 3. Wait for navigation to complete
 
 **Expected Results:**
 - Link with text "link" is visible and clickable
 - Navigation completes without errors
-- Page title is "When should you give your child a bank card? - ING Belgium"
+- Page title is "Calculate your Insurance premium - ING Belgium"
 - URL changes to the target page
 - Target page loads successfully
 
-### 6. Navigate from When should you give your child a bank card? - ING Belgium to Get in touch - ING Belgium
+### 6. Navigate from Calculate your Insurance premium - ING Belgium to Car insurance - ING Belgium
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/daily-banking/what-is-the-best-age-to-give-a-child-a-bank-card
-2. Click on the "link" link that navigates to Get in touch - ING Belgium
+1. Navigate to https://www.ing.be/en/individuals/insurance
+2. Click on the "link" link that navigates to Car insurance - ING Belgium
 3. Wait for navigation to complete
 
 **Expected Results:**
 - Link with text "link" is visible and clickable
 - Navigation completes without errors
-- Page title is "Get in touch - ING Belgium"
+- Page title is "Car insurance - ING Belgium"
 - URL changes to the target page
 - Target page loads successfully
 
-### 7. Navigate from Get in touch - ING Belgium to Not completely satisfied with our services? Contact us! - ING Belgium
+### 7. Navigate from Car insurance - ING Belgium to Accident assistance with ING: what you should do? - ING Belgium
 
 **Seed Test**: `tests/seed/seed.spec.ts`
 
 **Steps:**
-1. Navigate to https://www.ing.be/en/individuals/services/get-in-touch
-2. Click on the "link" link that navigates to Not completely satisfied with our services? Contact us! - ING Belgium
+1. Navigate to https://www.ing.be/en/individuals/insurance/insure-my-car/car-insurance
+2. Click on the "link" link that navigates to Accident assistance with ING: what you should do? - ING Belgium
 3. Wait for navigation to complete
 
 **Expected Results:**
 - Link with text "link" is visible and clickable
 - Navigation completes without errors
-- Page title is "Not completely satisfied with our services? Contact us! - ING Belgium"
+- Page title is "Accident assistance with ING: what you should do? - ING Belgium"
 - URL changes to the target page
 - Target page loads successfully
 

@@ -3,7 +3,7 @@ import { api } from '../services/api';
 import SettingsPanel from '../components/SettingsPanel';
 import LogOutput from '../components/LogOutput';
 import { Sparkles, Play, Square } from 'lucide-react';
-import { DEFAULT_PROMPTS } from '../constants/defaultPrompts';
+import { Personality } from '../constants/personalities';
 
 export default function PlannerPage() {
   const [url, setUrl] = useState('');
@@ -15,21 +15,8 @@ export default function PlannerPage() {
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [customPrompts, setCustomPrompts] = useState<{
-    planner?: string;
-    generator?: string;
-    healer?: string;
-    tts?: {
-      prefix?: string;
-      thinking?: string;
-      personalityDescriptions?: {
-        thinking?: string;
-        realizing?: string;
-        deciding?: string;
-        acting?: string;
-      };
-    };
-  }>({});
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const streamIdRef = useRef<string | null>(null); // To store the current streamId
   
   // Settings overrides - separate for each component
   const [settings, setSettings] = useState<{
@@ -54,6 +41,7 @@ export default function PlannerPage() {
       ttsProvider: string;
       ttsVoice: string;
     };
+    personality?: Personality;
   }>({
     planner: {
       useAI: true,
@@ -76,20 +64,8 @@ export default function PlannerPage() {
       ttsProvider: 'openai',
       ttsVoice: 'nova',
     },
+    personality: 'playful',
   });
-
-  const handleAddTag = () => {
-    if (newTag.trim() && !ignoredTags.includes(newTag.trim())) {
-      setIgnoredTags([...ignoredTags, newTag.trim()]);
-      setNewTag('');
-    }
-  };
-
-  const handleRemoveTag = (tag: string) => {
-    setIgnoredTags(ignoredTags.filter(t => t !== tag));
-  };
-
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     // Cleanup on unmount
@@ -97,6 +73,10 @@ export default function PlannerPage() {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
     };
   }, []);
@@ -110,6 +90,7 @@ export default function PlannerPage() {
 
     // Generate unique stream ID
     const streamId = `planner_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    streamIdRef.current = streamId; // Store streamId
 
     // Connect to SSE log stream (use same base as API service)
     const eventSource = new EventSource(
@@ -117,9 +98,6 @@ export default function PlannerPage() {
     );
 
     eventSourceRef.current = eventSource;
-    
-    // Store streamId in the eventSource for later access
-    (eventSourceRef.current as any).streamId = streamId;
 
     eventSource.onopen = () => {
       setLogs(prev => [...prev, '✅ Connected to log stream']);
@@ -146,7 +124,8 @@ export default function PlannerPage() {
     abortControllerRef.current = new AbortController();
 
     try {
-      const response = await api.post('/planner/run', {
+      // Build request payload
+      const requestPayload: any = {
         url,
         maxNavigations,
         ignoredTags,
@@ -160,7 +139,10 @@ export default function PlannerPage() {
           ttsProvider: settings.tts.ttsProvider,
           ttsVoice: settings.tts.ttsVoice,
         },
-      }, {
+        personality: settings.personality || 'playful', // Include personality setting
+      };
+
+      const response = await api.post('/planner/run', requestPayload, {
         signal: abortControllerRef.current.signal,
       });
       setResult(response.data.message || 'Planner completed successfully!');
@@ -179,221 +161,181 @@ export default function PlannerPage() {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
+      streamIdRef.current = null; // Clear streamId
     }
   };
 
   const handleStop = async () => {
-    // First, try to stop via the dedicated stop endpoint
-    const currentStreamId = (eventSourceRef.current as any)?.streamId;
-    if (currentStreamId) {
+    if (streamIdRef.current) {
+      setLogs(prev => [...prev, '⏹️ Sending stop signal to planner...']);
       try {
-        await api.post('/planner/stop', { streamId: currentStreamId });
-        setLogs(prev => [...prev, '⏹️ Stopping planner via API...']);
-      } catch (err) {
-        console.error('Failed to stop via API:', err);
+        await api.post('/planner/stop', { streamId: streamIdRef.current });
+        setLogs(prev => [...prev, '✅ Planner stop signal sent.']);
+      } catch (err: any) {
+        console.error('Failed to send stop signal:', err);
+        setLogs(prev => [...prev, `❌ Failed to send stop signal: ${err.response?.data?.error || err.message}`]);
       }
     }
-    
-    // Also abort the frontend request
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       setLoading(false);
-      setLogs(prev => [...prev, '⏹️ Stopping planner...']);
+      setLogs(prev => [...prev, '⏹️ Aborting frontend request...']);
     }
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
+    streamIdRef.current = null; // Clear streamId
+  };
+
+  const addIgnoredTag = () => {
+    if (newTag.trim() && !ignoredTags.includes(newTag.trim())) {
+      setIgnoredTags([...ignoredTags, newTag.trim()]);
+      setNewTag('');
+    }
+  };
+
+  const removeIgnoredTag = (tag: string) => {
+    setIgnoredTags(ignoredTags.filter(t => t !== tag));
   };
 
   return (
     <div className="px-4 sm:px-6 lg:px-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
-          <Sparkles className="w-6 h-6 mr-2" />
-          Planner
-        </h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Explore web applications and generate test plans
-        </p>
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+              <Sparkles className="w-8 h-8 text-primary-600" />
+              Planner
+            </h1>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">
+              Explore your application and generate test scenarios
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main form */}
         <div className="lg:col-span-2 space-y-6">
           <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-            <div className="space-y-6">
-              {/* URL Input */}
+            <div className="space-y-4">
               <div>
-                <label htmlFor="url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Start URL
                 </label>
                 <input
                   type="url"
-                  id="url"
-                  required
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   placeholder="https://example.com"
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:text-white sm:text-sm px-3 py-2"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                 />
               </div>
 
-              {/* Max Navigations */}
               <div>
-                <label htmlFor="navigations" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Maximum Navigations
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Max Navigations
                 </label>
                 <input
                   type="number"
-                  id="navigations"
-                  min="1"
-                  max="20"
                   value={maxNavigations}
                   onChange={(e) => setMaxNavigations(parseInt(e.target.value) || 3)}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:text-white sm:text-sm px-3 py-2"
+                  min="1"
+                  max="20"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Number of pages to explore
+                </p>
               </div>
 
-              {/* Ignored Tags */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Ignored Tags (elements to skip)
+                  Ignored Tags
                 </label>
-                <div className="flex flex-wrap gap-2 mb-2">
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addIgnoredTag())}
+                    placeholder="e.g., header, footer"
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={addIgnoredTag}
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
                   {ignoredTags.map((tag) => (
                     <span
                       key={tag}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
                     >
                       {tag}
                       <button
                         type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        onClick={() => removeIgnoredTag(tag)}
+                        className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"
                       >
                         ×
                       </button>
                     </span>
                   ))}
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-                    placeholder="Add tag (e.g., header)"
-                    className="flex-1 rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:text-white sm:text-sm px-3 py-2"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddTag}
-                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
-                  >
-                    Add
-                  </button>
-                </div>
               </div>
 
-              {/* Submit and Stop Buttons */}
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <button
                   type="submit"
-                  disabled={loading || !url}
-                  className="flex-1 flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={loading}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Running Planner...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-5 h-5 mr-2" />
-                      Run Planner
-                    </>
-                  )}
+                  <Play className="w-5 h-5" />
+                  {loading ? 'Running...' : 'Start Planning'}
                 </button>
                 {loading && (
                   <button
                     type="button"
                     onClick={handleStop}
-                    className="px-4 py-2 border border-red-300 dark:border-red-700 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900 hover:bg-red-100 dark:hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                   >
                     <Square className="w-5 h-5" />
+                    Stop
                   </button>
                 )}
               </div>
 
-              {/* Results */}
               {result && (
-                <div className="rounded-md bg-green-50 dark:bg-green-900 p-4">
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
                   <p className="text-sm text-green-800 dark:text-green-200">{result}</p>
                 </div>
               )}
 
               {error && (
-                <div className="rounded-md bg-red-50 dark:bg-red-900 p-4">
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                   <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
                 </div>
               )}
             </div>
           </form>
         </div>
-
-        {/* Settings Panel */}
         <div className="lg:col-span-1">
           <SettingsPanel 
             settings={settings} 
             onChange={setSettings} 
             component="planner"
-            customPrompts={customPrompts}
-            onPromptChange={(component, prompt) => {
-              setCustomPrompts(prev => ({
+            onPersonalityChange={(personality) => {
+              setSettings(prev => ({
                 ...prev,
-                [component]: prompt === DEFAULT_PROMPTS[component] ? undefined : prompt,
+                personality,
               }));
-            }}
-            onTTSPromptChange={(type, prompt) => {
-              setCustomPrompts(prev => {
-                const defaultPrompt = DEFAULT_PROMPTS.tts[type];
-                const newTTS = {
-                  ...prev.tts,
-                  [type]: prompt === defaultPrompt ? undefined : prompt,
-                };
-                // Remove tts object if all are undefined
-                if (!newTTS.prefix && !newTTS.thinking && !newTTS.personalityDescriptions) {
-                  const { tts, ...rest } = prev;
-                  return rest;
-                }
-                return {
-                  ...prev,
-                  tts: newTTS,
-                };
-              });
-            }}
-            onTTSPersonalityChange={(descriptions) => {
-              setCustomPrompts(prev => {
-                const defaultDescriptions = DEFAULT_PROMPTS.tts.personalityDescriptions;
-                const isDefault = JSON.stringify(descriptions) === JSON.stringify(defaultDescriptions);
-                const newTTS = {
-                  ...prev.tts,
-                  personalityDescriptions: isDefault ? undefined : descriptions,
-                };
-                // Remove tts object if all are undefined
-                if (!newTTS.prefix && !newTTS.thinking && !newTTS.personalityDescriptions) {
-                  const { tts, ...rest } = prev;
-                  return rest;
-                }
-                return {
-                  ...prev,
-                  tts: newTTS,
-                };
-              });
             }}
           />
         </div>
@@ -406,4 +348,3 @@ export default function PlannerPage() {
     </div>
   );
 }
-

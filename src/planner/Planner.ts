@@ -36,6 +36,7 @@ export class Planner {
   private navigationManager!: NavigationManager;
   private tts: TTS | null = null;
   private headless: boolean = false;
+  private personality?: string;
 
   /**
    * Initializes the browser and AI/TTS components
@@ -53,8 +54,8 @@ export class Planner {
       console.log(`✅ Browser launched (${headless ? 'headless' : 'headed'})`);
     }
 
-    // Initialize decision maker
-    this.decisionMaker = new DecisionMaker();
+    // Initialize decision maker with personality if provided
+    this.decisionMaker = new DecisionMaker(this.personality);
     this.useAI = useAI && this.decisionMaker.isEnabled();
 
     // Get AI provider and model info
@@ -64,7 +65,7 @@ export class Planner {
     // Initialize TTS if enabled
     let ttsInfo: { provider: string; model?: string; voice?: string } | null = null;
     if (enableTTS) {
-      this.tts = new TTS(true);
+      this.tts = new TTS(true, this.personality as any);
       ttsInfo = await this.tts.getProviderInfo();
     }
 
@@ -87,14 +88,39 @@ export class Planner {
     useAI: boolean = false,
     enableTTS: boolean = false,
     headless: boolean = false,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    personality?: string
   ): Promise<TestPlan> {
     this.abortSignal = abortSignal || null;
+    this.personality = personality || 'playful';
+    console.log(`🎭 Planner.explore() received personality: "${this.personality}"`);
     // Initialize exploration state
     this.initializeExplorationState(url, maxNavigations);
 
     // Ensure browser is initialized
     await this.ensureBrowserInitialized(useAI, enableTTS, headless);
+
+    // Recreate DecisionMaker with personality now that it's set
+    // This ensures the personality is used when making AI decisions
+    if (useAI) {
+      console.log('🔄 Recreating DecisionMaker with personality...');
+      this.decisionMaker = new DecisionMaker(this.personality);
+      this.useAI = this.decisionMaker.isEnabled();
+      
+      if (this.personality) {
+        console.log(`✅ Using personality: ${this.personality}`);
+      } else {
+        console.log('ℹ️  Using default personality (playful)');
+      }
+    }
+
+    // Recreate TTS with personality now that it's set
+    // This ensures the personality is used for TTS prefixes
+    if (enableTTS) {
+      console.log(`🔄 Recreating TTS with personality: ${this.personality}`);
+      this.tts = new TTS(true, this.personality as any);
+      console.log(`✅ TTS recreated with personality: ${this.personality}`);
+    }
 
     // Create fresh page context for this exploration
     await this.createFreshPageContext();
@@ -139,10 +165,21 @@ export class Planner {
     } else {
       // Update AI/TTS settings if needed
       if (useAI && !this.useAI) {
-        this.decisionMaker = new DecisionMaker();
+        this.decisionMaker = new DecisionMaker(this.personality);
         this.useAI = this.decisionMaker.isEnabled();
-      } else if (enableTTS && !this.tts) {
-        this.tts = new TTS(true);
+      } else if (useAI && this.decisionMaker && this.personality) {
+        // Recreate DecisionMaker if personality is available but wasn't used
+        this.decisionMaker = new DecisionMaker(this.personality);
+        console.log('🔄 Updated DecisionMaker with personality');
+      } else if (enableTTS) {
+        // Always recreate TTS if personality might have changed
+        // Check if we need to recreate TTS (if it doesn't exist or personality changed)
+        if (!this.tts || (this.personality && this.tts.getPersonality() !== this.personality)) {
+          this.tts = new TTS(true, this.personality as any);
+          if (this.personality) {
+            console.log(`🔄 Recreated TTS with personality: ${this.personality}`);
+          }
+        }
       }
       // Update headless setting if changed
       if (headless !== this.headless) {

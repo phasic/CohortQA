@@ -20,7 +20,6 @@ export class TestHealerAI {
   private client: AIClient | null = null;
   private provider: AIProvider | null = null;
   private enabled: boolean = false;
-
   constructor() {
     this.provider = ProviderFactory.detectHealerProvider();
     
@@ -102,7 +101,7 @@ export class TestHealerAI {
     const contextLines = lines.slice(contextStart, contextEnd);
     const contextCode = contextLines.join('\n');
     
-    let prompt = `You are a Playwright test healing expert. Fix the broken test code below.
+    const prompt = `You are a Playwright test healing expert. Fix the broken test code below.
 
 Test Name: ${testName}
 Error: ${errorMessage}

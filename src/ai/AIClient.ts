@@ -11,9 +11,11 @@ export interface AIClientConfig {
 
 export abstract class AIClient {
   protected config: AIClientConfig;
+  protected personality?: string;
 
-  constructor(config: AIClientConfig) {
+  constructor(config: AIClientConfig, personality?: string) {
     this.config = config;
+    this.personality = personality as any;
   }
 
   /**
@@ -68,7 +70,7 @@ export abstract class AIClient {
    * Builds the prompt for element selection
    */
   protected buildPrompt(context: PageContext): string {
-    return PromptBuilder.buildElementSelectionPrompt(context);
+    return PromptBuilder.buildElementSelectionPrompt(context, 12, this.personality as any);
   }
 }
 

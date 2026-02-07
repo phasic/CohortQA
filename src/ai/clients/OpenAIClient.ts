@@ -10,6 +10,19 @@ export class OpenAIClient extends AIClient {
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     
     try {
+      // Use prompt as system message (includes personality injection if provided)
+      // Add a simple user message to trigger the response
+      const messages = [
+        {
+          role: 'system',
+          content: prompt // Prompt includes personality injection and all context
+        },
+        {
+          role: 'user',
+          content: 'Please analyze the elements and respond with JSON.'
+        }
+      ];
+
       const response = await fetch(this.config.apiUrl, {
         method: 'POST',
         headers: {
@@ -18,16 +31,7 @@ export class OpenAIClient extends AIClient {
         },
         body: JSON.stringify({
           model: this.config.model,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a test automation expert. Always respond with valid JSON only.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
+          messages: messages,
           temperature: this.config.temperature ?? 0.2,
           max_tokens: this.config.maxTokens ?? 150
         }),

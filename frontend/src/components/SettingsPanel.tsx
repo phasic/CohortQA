@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { Settings, FileText, User } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { AI_MODELS, TTS_VOICES, getDefaultAIModel, getDefaultTTSVoice } from '../constants/providerOptions';
-import PromptEditor from './PromptEditor';
-import PersonalityEditor from './PersonalityEditor';
-import { DEFAULT_PROMPTS } from '../constants/defaultPrompts';
+import { PERSONALITIES, PERSONALITY_OPTIONS, Personality } from '../constants/personalities';
 
 interface ComponentSettings {
   useAI: boolean;
@@ -21,51 +19,23 @@ interface SettingsData {
     ttsProvider: string;
     ttsVoice: string;
   };
+  personality?: Personality; // Global personality setting
 }
 
 interface SettingsPanelProps {
   settings: SettingsData;
   onChange: (settings: SettingsData) => void;
   component: 'planner' | 'generator' | 'healer'; // Which component this panel is for
-  customPrompts?: {
-    planner?: string;
-    generator?: string;
-    healer?: string;
-    tts?: {
-      prefix?: string;
-      thinking?: string;
-      personalityDescriptions?: {
-        thinking?: string;
-        realizing?: string;
-        deciding?: string;
-        acting?: string;
-      };
-    };
-  };
-  onPromptChange?: (component: 'planner' | 'generator' | 'healer', prompt: string) => void;
-  onTTSPromptChange?: (type: 'prefix' | 'thinking', prompt: string) => void;
-  onTTSPersonalityChange?: (descriptions: {
-    thinking: string;
-    realizing: string;
-    deciding: string;
-    acting: string;
-  }) => void;
+  onPersonalityChange?: (personality: Personality) => void; // Callback for personality change
 }
 
 export default function SettingsPanel({ 
   settings, 
   onChange, 
   component,
-  customPrompts,
-  onPromptChange,
-  onTTSPromptChange,
-  onTTSPersonalityChange,
+  onPersonalityChange,
 }: SettingsPanelProps) {
   const [expanded, setExpanded] = useState(true);
-  const [promptEditorOpen, setPromptEditorOpen] = useState(false);
-  const [ttsPromptEditorOpen, setTTSPromptEditorOpen] = useState(false);
-  const [personalityEditorOpen, setPersonalityEditorOpen] = useState(false);
-  const [ttsPromptType, setTTSPromptType] = useState<'prefix' | 'thinking'>('prefix');
   const showTTS = component === 'planner';
 
   const updateComponentSetting = <K extends keyof ComponentSettings>(
@@ -212,23 +182,6 @@ export default function SettingsPanel({
                   )}
                 </div>
 
-                {/* Prompt Editor Button */}
-                {settings[component].useAI && (
-                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <button
-                      onClick={() => setPromptEditorOpen(true)}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-colors"
-                    >
-                      <FileText className="w-4 h-4" />
-                      Edit System Prompt
-                    </button>
-                    {customPrompts?.[component] && customPrompts[component] !== DEFAULT_PROMPTS[component] && (
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
-                        Using custom prompt
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -255,6 +208,45 @@ export default function SettingsPanel({
               <p className="ml-6 text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Browser will run in the background without a visible window
               </p>
+            </div>
+          )}
+
+          {/* Personality Settings - Only for Planner */}
+          {showTTS && (
+            <div>
+              <div className="mb-2">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                  AI Personality
+                </span>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Personality
+                </label>
+                <select
+                  value={settings.personality || 'playful'}
+                  onChange={(e) => {
+                    const personality = e.target.value as Personality;
+                    onChange({
+                      ...settings,
+                      personality,
+                    });
+                    if (onPersonalityChange) {
+                      onPersonalityChange(personality);
+                    }
+                  }}
+                  className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:text-white text-sm px-2 py-1"
+                >
+                  {PERSONALITY_OPTIONS.map((personality) => (
+                    <option key={personality} value={personality}>
+                      {PERSONALITIES[personality].name} - {PERSONALITIES[personality].description}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Sets the personality for both AI decision-making and TTS responses
+                </p>
+              </div>
             </div>
           )}
 
@@ -322,61 +314,6 @@ export default function SettingsPanel({
                     )}
                   </div>
 
-                  {/* TTS Prompt Editor Button */}
-                  {settings.tts.useTTS && (
-                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <div className="mb-2">
-                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                          TTS Prompts
-                        </label>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setTTSPromptType('prefix');
-                              setTTSPromptEditorOpen(true);
-                            }}
-                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-colors"
-                          >
-                            <FileText className="w-4 h-4" />
-                            Edit Prefix Prompt
-                          </button>
-                          <button
-                            onClick={() => {
-                              setTTSPromptType('thinking');
-                              setTTSPromptEditorOpen(true);
-                            }}
-                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-colors"
-                          >
-                            <FileText className="w-4 h-4" />
-                            Edit Thinking Prompt
-                          </button>
-                        </div>
-                        {(customPrompts?.tts?.prefix || customPrompts?.tts?.thinking) && (
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
-                            Using custom TTS prompts
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Personality Descriptions Editor Button */}
-                      {settings.tts.useTTS && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                          <button
-                            onClick={() => setPersonalityEditorOpen(true)}
-                            className="flex items-center justify-center gap-2 w-full px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-md transition-colors"
-                          >
-                            <User className="w-4 h-4" />
-                            Edit Personality Descriptions
-                          </button>
-                          {customPrompts?.tts?.personalityDescriptions && (
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
-                              Using custom personality descriptions
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -384,58 +321,6 @@ export default function SettingsPanel({
         </div>
       )}
 
-      {/* AI Prompt Editor Modal */}
-      {onPromptChange && (
-        <PromptEditor
-          isOpen={promptEditorOpen}
-          onClose={() => setPromptEditorOpen(false)}
-          component={component}
-          currentPrompt={customPrompts?.[component] || DEFAULT_PROMPTS[component]}
-          defaultPrompt={DEFAULT_PROMPTS[component]}
-          onSave={(prompt) => {
-            onPromptChange(component, prompt);
-            setPromptEditorOpen(false);
-          }}
-        />
-      )}
-
-      {/* TTS Prompt Editor Modal */}
-      {onTTSPromptChange && showTTS && (
-        <PromptEditor
-          isOpen={ttsPromptEditorOpen}
-          onClose={() => setTTSPromptEditorOpen(false)}
-          component="planner"
-          currentPrompt={
-            customPrompts?.tts?.[ttsPromptType] || 
-            DEFAULT_PROMPTS.tts[ttsPromptType]
-          }
-          defaultPrompt={DEFAULT_PROMPTS.tts[ttsPromptType]}
-          onSave={(prompt) => {
-            onTTSPromptChange(ttsPromptType, prompt);
-            setTTSPromptEditorOpen(false);
-          }}
-          title={`Edit TTS ${ttsPromptType === 'prefix' ? 'Prefix' : 'Thinking'} Prompt`}
-        />
-      )}
-
-      {/* Personality Descriptions Editor Modal */}
-      {onTTSPersonalityChange && showTTS && (
-        <PersonalityEditor
-          isOpen={personalityEditorOpen}
-          onClose={() => setPersonalityEditorOpen(false)}
-          currentDescriptions={{
-            thinking: customPrompts?.tts?.personalityDescriptions?.thinking || DEFAULT_PROMPTS.tts.personalityDescriptions.thinking,
-            realizing: customPrompts?.tts?.personalityDescriptions?.realizing || DEFAULT_PROMPTS.tts.personalityDescriptions.realizing,
-            deciding: customPrompts?.tts?.personalityDescriptions?.deciding || DEFAULT_PROMPTS.tts.personalityDescriptions.deciding,
-            acting: customPrompts?.tts?.personalityDescriptions?.acting || DEFAULT_PROMPTS.tts.personalityDescriptions.acting,
-          }}
-          defaultDescriptions={DEFAULT_PROMPTS.tts.personalityDescriptions}
-          onSave={(descriptions) => {
-            onTTSPersonalityChange(descriptions);
-            setPersonalityEditorOpen(false);
-          }}
-        />
-      )}
     </div>
   );
 }

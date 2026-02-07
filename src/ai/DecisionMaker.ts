@@ -10,10 +10,12 @@ export class DecisionMaker {
   private client: AIClient | null = null;
   private provider: AIProvider;
   private enabled: boolean = false;
+  private personality?: string;
 
-  constructor() {
+  constructor(personality?: string) {
+    this.personality = personality;
     this.provider = ProviderFactory.detectProvider();
-    this.client = ProviderFactory.createClient(this.provider);
+    this.client = ProviderFactory.createClient(this.provider, personality);
     this.enabled = this.client !== null;
 
     if (this.provider === 'heuristic') {

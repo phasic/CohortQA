@@ -25,7 +25,6 @@ export class TestCodeGenerator {
   private client: AIClient | null = null;
   private provider: AIProvider | null = null;
   private enabled: boolean = false;
-
   constructor() {
     this.provider = ProviderFactory.detectGeneratorProvider();
     

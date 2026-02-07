@@ -3,6 +3,40 @@
  * Provides REST API endpoints to interact with Planner, Generator, and Healer
  */
 
+// Load environment variables from .env file (if it exists)
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+try {
+  const envPath = resolve(process.cwd(), '.env');
+  const envContent = readFileSync(envPath, 'utf-8');
+  const envLines = envContent.split('\n');
+  for (const line of envLines) {
+    const trimmed = line.trim();
+    // Skip comments and empty lines
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    // Parse KEY=VALUE format
+    const match = trimmed.match(/^([^=]+)=(.*)$/);
+    if (match) {
+      const key = match[1].trim();
+      let value = match[2].trim();
+      // Remove quotes if present
+      if ((value.startsWith('"') && value.endsWith('"')) || 
+          (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      // Only set if not already set (env vars take precedence)
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  }
+  console.log('✅ Loaded environment variables from .env file');
+} catch (error) {
+  // .env file doesn't exist or can't be read, that's okay
+  // User can set environment variables manually or create .env file
+  console.log('ℹ️  No .env file found (or couldn\'t read it). Using system environment variables.');
+}
+
 import express from 'express';
 import cors from 'cors';
 import * as fs from 'fs/promises';
@@ -175,7 +209,10 @@ app.post('/api/planner/run', async (req, res) => {
   }, 1000); // Check every 1 second for faster response
 
   try {
-    const { url, maxNavigations, ignoredTags, settings, streamId: _streamId } = req.body;
+      const { url, maxNavigations, ignoredTags, settings, streamId: _streamId, personality } = req.body;
+
+    console.log(`🎭 API received personality from frontend: "${personality}" (type: ${typeof personality})`);
+    console.log(`🎭 Full request body keys:`, Object.keys(req.body));
 
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });
@@ -202,6 +239,9 @@ app.post('/api/planner/run', async (req, res) => {
     console.log(`   AI enabled: ${settings?.useAI || false}`);
     console.log(`   TTS enabled: ${settings?.useTTS || false}`);
     console.log(`   Headless mode: ${settings?.headless || false}`);
+    if (personality) {
+      console.log(`   🎭 Personality: ${personality}`);
+    }
     
     planner = new Planner();
     
@@ -229,6 +269,8 @@ app.post('/api/planner/run', async (req, res) => {
       console.log('🌐 Starting exploration...');
       // Run the exploration - this is a long-running operation
       // Pass abort signal so planner can be cancelled
+      const finalPersonality = personality || 'playful';
+      console.log(`🎭 API: Passing personality "${finalPersonality}" to planner.explore()`);
       const plan = await planner.explore(
         url,
         seedPath,
@@ -236,7 +278,8 @@ app.post('/api/planner/run', async (req, res) => {
         settings?.useAI || false,
         settings?.useTTS || false,
         settings?.headless || false,
-        abortController.signal
+        abortController.signal,
+        finalPersonality
       );
 
       console.log(`✅ Exploration complete! Generated ${plan.scenarios.length} scenarios`);

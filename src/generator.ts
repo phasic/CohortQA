@@ -16,7 +16,6 @@ export class Generator {
   private browser: Browser | null = null;
   private page: Page | null = null;
   private testCodeGenerator: TestCodeGenerator;
-
   constructor() {
     this.testCodeGenerator = new TestCodeGenerator();
   }

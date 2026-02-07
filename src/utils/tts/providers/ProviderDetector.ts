@@ -34,12 +34,16 @@ export class ProviderDetector {
     if (ttsProvider === 'openai') {
       const openaiApiKey = process.env.OPENAI_API_KEY;
       if (openaiApiKey) {
+        console.log('✅ OpenAI API key found in environment variables');
         return {
           provider: 'openai',
           openaiApiKey
         };
       } else {
-        console.warn('⚠️  TTS provider set to OpenAI but OPENAI_API_KEY not found. Falling back to other providers.');
+        console.warn('⚠️  TTS provider set to OpenAI but OPENAI_API_KEY not found.');
+        console.warn('   Make sure your .env file contains: OPENAI_API_KEY=your-key-here');
+        console.warn('   Or set it as an environment variable: export OPENAI_API_KEY=your-key-here');
+        console.warn('   Falling back to other providers.');
       }
     }
     

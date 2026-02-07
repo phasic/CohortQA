@@ -19,8 +19,8 @@ export class OllamaClient extends AIClient {
           model: this.config.model,
           messages: [
             {
-              role: 'user',
-              content: prompt
+              role: 'system',
+              content: prompt // Prompt includes personality injection and all context
             }
           ],
           stream: false,
