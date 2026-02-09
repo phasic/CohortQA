@@ -1,5 +1,6 @@
 import { PageContext, AIRecommendation, AIProvider } from './types.js';
 import { PromptBuilder } from './PromptBuilder.js';
+import { Personality } from '../utils/personality.js';
 
 export interface AIClientConfig {
   apiUrl: string;
@@ -11,11 +12,11 @@ export interface AIClientConfig {
 
 export abstract class AIClient {
   protected config: AIClientConfig;
-  protected personality?: string;
+  protected personality?: Personality;
 
-  constructor(config: AIClientConfig, personality?: string) {
+  constructor(config: AIClientConfig, personality?: Personality) {
     this.config = config;
-    this.personality = personality as any;
+    this.personality = personality;
   }
 
   /**

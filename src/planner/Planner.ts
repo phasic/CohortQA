@@ -16,6 +16,7 @@ import { ConfigDisplay } from './utils/ConfigDisplay.js';
 import { PageStateLogger } from './utils/PageStateLogger.js';
 import { PageLoader } from './utils/PageLoader.js';
 import { ElementSelector, type ElementSelectionResult } from './utils/ElementSelector.js';
+import { Personality } from '../utils/personality.js';
 import chalk from 'chalk';
 
 /**
@@ -36,7 +37,7 @@ export class Planner {
   private navigationManager!: NavigationManager;
   private tts: TTS | null = null;
   private headless: boolean = false;
-  private personality?: string;
+  private personality?: Personality;
 
   /**
    * Initializes the browser and AI/TTS components
@@ -91,10 +92,10 @@ export class Planner {
     enableTTS: boolean = false,
     headless: boolean = false,
     abortSignal?: AbortSignal,
-    personality?: string
+    personality?: Personality
   ): Promise<TestPlan> {
     this.abortSignal = abortSignal || null;
-    this.personality = personality || 'playful';
+    this.personality = personality || 'playful' as Personality;
     // Initialize exploration state
     this.initializeExplorationState(url, maxNavigations);
 

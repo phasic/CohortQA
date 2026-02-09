@@ -2,6 +2,7 @@ import { PageContext, AIRecommendation, AIProvider } from './types.js';
 import { ProviderFactory } from './ProviderFactory.js';
 import { AIClient } from './AIClient.js';
 import { HeuristicSelector } from './HeuristicSelector.js';
+import { Personality } from '../utils/personality.js';
 
 /**
  * Main decision maker that uses AI or heuristics to select the best interaction
@@ -10,9 +11,9 @@ export class DecisionMaker {
   private client: AIClient | null = null;
   private provider: AIProvider;
   private enabled: boolean = false;
-  private personality?: string;
+  private personality?: Personality;
 
-  constructor(personality?: string) {
+  constructor(personality?: Personality) {
     this.personality = personality;
     this.provider = ProviderFactory.detectProvider();
     console.log(`🔍 DecisionMaker: Detected provider: ${this.provider}`);

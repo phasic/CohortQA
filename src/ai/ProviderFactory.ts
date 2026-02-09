@@ -4,6 +4,7 @@ import { OpenAIClient } from './clients/OpenAIClient.js';
 import { AnthropicClient } from './clients/AnthropicClient.js';
 import { OllamaClient } from './clients/OllamaClient.js';
 import { loadAIConfig } from '../config/ai-config.js';
+import { Personality } from '../utils/personality.js';
 
 export class ProviderFactory {
   /**
@@ -106,7 +107,7 @@ export class ProviderFactory {
   /**
    * Creates an AI client for the specified provider
    */
-  static createClient(provider: AIProvider, personality?: string): AIClient | null {
+  static createClient(provider: AIProvider, personality?: Personality): AIClient | null {
     // If provider is 'heuristic', return null to disable AI
     if (provider === 'heuristic') {
       console.log(`🔍 ProviderFactory.createClient: Provider is heuristic, returning null`);
