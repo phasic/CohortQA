@@ -15,16 +15,22 @@ export class DecisionMaker {
   constructor(personality?: string) {
     this.personality = personality;
     this.provider = ProviderFactory.detectProvider();
+    console.log(`🔍 DecisionMaker: Detected provider: ${this.provider}`);
+    console.log(`🔍 DecisionMaker: PLANNER_AI_PROVIDER env var: ${process.env.PLANNER_AI_PROVIDER || 'not set'}`);
     this.client = ProviderFactory.createClient(this.provider, personality);
     this.enabled = this.client !== null;
+    console.log(`🔍 DecisionMaker: Client created: ${this.client !== null}, Enabled: ${this.enabled}`);
 
     if (this.provider === 'heuristic') {
       // Heuristic mode - AI is explicitly disabled
       this.enabled = false;
+      console.log('🔍 DecisionMaker: Provider is heuristic, disabling AI');
     } else if (this.enabled && this.provider === 'ollama') {
       console.log('🤖 Using Ollama (local, free) for AI decisions');
       // Note: We don't check if server is running here to avoid blocking
       // The actual call will fail gracefully if server is down
+    } else if (!this.enabled) {
+      console.log(`🔍 DecisionMaker: AI not enabled. Provider: ${this.provider}, Client: ${this.client ? 'exists' : 'null'}`);
     }
   }
 

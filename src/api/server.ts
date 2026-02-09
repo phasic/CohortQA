@@ -221,7 +221,8 @@ app.post('/api/planner/run', async (req, res) => {
       logInterceptorEnabled = true;
     }
 
-    // Apply settings overrides for planner
+    // Apply settings overrides for planner BEFORE creating Planner instance
+    // This ensures DecisionMaker detects the correct provider
     if (settings) {
       process.env.PLANNER_AI_PROVIDER = settings.useAI ? settings.aiProvider : 'heuristic';
       process.env.PLANNER_AI_MODEL = settings.aiModel;
@@ -229,6 +230,7 @@ app.post('/api/planner/run', async (req, res) => {
         process.env.TTS_PROVIDER = settings.ttsProvider;
         process.env.TTS_VOICE = settings.ttsVoice;
       }
+      console.log(`🔧 Set PLANNER_AI_PROVIDER=${process.env.PLANNER_AI_PROVIDER}, useAI=${settings.useAI}, aiProvider=${settings.aiProvider}`);
     }
 
     console.log(`\n🚀 Starting planner for URL: ${url}`);
@@ -240,6 +242,7 @@ app.post('/api/planner/run', async (req, res) => {
       console.log(`   🎭 Personality: ${personality}`);
     }
     
+    // Create Planner AFTER environment variables are set
     planner = new Planner();
     
     // Update the stored operation with the planner instance

@@ -16,7 +16,7 @@ export class PromptBuilder {
     const elementsSummary = this.formatElementsSummary(elementsToShow, maxElements);
     const recent = (context.recentInteractionKeys || []).slice(-5); // Reduced from 10 to 5
     
-    const basePrompt = `Select the best element to click for test coverage.
+    const basePrompt = `You are a test automation assistant. Your task is to select the best interactive element to click for web testing.
 
 Page: ${context.title} (${context.url})
 Goal: ${context.currentNavigations}/${context.targetNavigations} pages explored
@@ -27,8 +27,11 @@ ${elementsSummary}
 Priority: 1) Links to NEW pages 2) Investment/product links 3) Main content links
 Avoid: Sidebar/nav menus, repeated clicks, already visited URLs
 
-Respond ONLY with JSON:
-{"elementIndex": <0-${elementsToShow.length - 1}>, "reasoning": "<brief>"}`;
+CRITICAL: You MUST respond with ONLY valid JSON, no other text. Format:
+{"elementIndex": <number 0-${elementsToShow.length - 1}>, "reasoning": "<brief explanation>"}
+
+Example response:
+{"elementIndex": 3, "reasoning": "Link to investment products page"}`;
     
     // Inject personality if provided
     if (personality) {

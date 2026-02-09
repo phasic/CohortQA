@@ -13,6 +13,7 @@ export class ProviderFactory {
     // Priority 1: Explicit environment variable
     if (process.env.AI_PROVIDER || process.env.PLANNER_AI_PROVIDER) {
       const provider = (process.env.AI_PROVIDER || process.env.PLANNER_AI_PROVIDER)?.toLowerCase();
+      console.log(`🔍 ProviderFactory.detectProvider: Found env var: ${provider}`);
       if (provider === 'heuristic') {
         return 'heuristic';
       }
@@ -108,11 +109,14 @@ export class ProviderFactory {
   static createClient(provider: AIProvider, personality?: string): AIClient | null {
     // If provider is 'heuristic', return null to disable AI
     if (provider === 'heuristic') {
+      console.log(`🔍 ProviderFactory.createClient: Provider is heuristic, returning null`);
       return null;
     }
     
     const config = this.getClientConfig(provider);
+    console.log(`🔍 ProviderFactory.createClient: Provider: ${provider}, Config: ${config ? 'exists' : 'null'}`);
     if (!config) {
+      console.log(`🔍 ProviderFactory.createClient: No config found for provider ${provider}, returning null`);
       return null;
     }
 

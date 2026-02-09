@@ -20,13 +20,17 @@ export class OllamaClient extends AIClient {
           messages: [
             {
               role: 'system',
+              content: 'You are a test automation assistant. Always respond with valid JSON only, no explanations or other text.'
+            },
+            {
+              role: 'user',
               content: prompt // Prompt includes personality injection and all context
             }
           ],
           stream: false,
           options: {
-            temperature: this.config.temperature ?? 0.2,
-            num_predict: 150 // Limit response length for faster generation
+            temperature: 0.1, // Lower temperature for more deterministic JSON output
+            num_predict: 200 // Slightly more tokens to ensure complete JSON
           }
         }),
         signal: controller.signal

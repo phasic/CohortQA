@@ -36,6 +36,8 @@ export class ElementSelector {
 
     // If AI is enabled, try to use it
     if (useAI) {
+      console.log(`🔍 ElementSelector: useAI=true, attempting AI selection...`);
+      console.log(`🔍 ElementSelector: decisionMaker.isEnabled()=${decisionMaker.isEnabled()}`);
       try {
         const result = await this.selectWithAI(
           page,
@@ -47,11 +49,17 @@ export class ElementSelector {
           initialUrl
         );
         if (result) {
+          console.log(`🔍 ElementSelector: AI selection successful, method=${result.method}`);
           return result;
+        } else {
+          console.log(`🔍 ElementSelector: AI selection returned null, falling back to heuristics`);
         }
       } catch (error) {
+        console.log(`🔍 ElementSelector: AI selection error: ${error}, falling back to heuristics`);
         // Fall back to heuristics on AI error
       }
+    } else {
+      console.log(`🔍 ElementSelector: useAI=false, using heuristics directly`);
     }
 
     // Use heuristics as fallback

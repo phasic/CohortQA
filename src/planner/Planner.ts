@@ -29,7 +29,7 @@ export class Planner {
   private baseUrl: string = '';
   private initialUrl: string = '';
   private abortSignal: AbortSignal | null = null;
-  private decisionMaker: DecisionMaker = new DecisionMaker();
+  private decisionMaker: DecisionMaker | null = null; // Initialize as null, create in initialize()
   private useAI: boolean = false;
   private currentMaxNavigations: number = 3;
   private interactionTracker: InteractionTracker = new InteractionTracker();
@@ -54,7 +54,9 @@ export class Planner {
       console.log(`✅ Browser launched (${headless ? 'headless' : 'headed'})`);
     }
 
-    // Initialize decision maker with personality if provided
+    // Initialize decision maker AFTER environment variables are set (from API server)
+    // This ensures the correct provider is detected
+    // Always recreate to ensure env vars are read correctly
     this.decisionMaker = new DecisionMaker(this.personality);
     this.useAI = useAI && this.decisionMaker.isEnabled();
 
@@ -102,15 +104,20 @@ export class Planner {
     // Recreate DecisionMaker with personality now that it's set
     // This ensures the personality is used when making AI decisions
     if (useAI) {
-      console.log('🔄 Recreating DecisionMaker with personality...');
+      console.log(`🔄 Recreating DecisionMaker with personality... (useAI=${useAI})`);
       this.decisionMaker = new DecisionMaker(this.personality);
-      this.useAI = this.decisionMaker.isEnabled();
+      const wasEnabled = this.decisionMaker.isEnabled();
+      this.useAI = useAI && wasEnabled;
+      console.log(`🔍 Planner.explore: DecisionMaker.isEnabled()=${wasEnabled}, useAI=${useAI}, this.useAI=${this.useAI}`);
       
       if (this.personality) {
         console.log(`✅ Using personality: ${this.personality}`);
       } else {
         console.log('ℹ️  Using default personality (playful)');
       }
+    } else {
+      console.log(`🔍 Planner.explore: useAI is false, skipping DecisionMaker recreation`);
+      this.useAI = false;
     }
 
     // Create fresh page context for this exploration
@@ -485,6 +492,10 @@ export class Planner {
       }
 
       // Select the best element to interact with
+      // Ensure decisionMaker is initialized
+      if (!this.decisionMaker) {
+        this.decisionMaker = new DecisionMaker(this.personality);
+      }
       const selection = await ElementSelector.selectElement(
         page,
         interactiveElements,
