@@ -1,124 +1,71 @@
 # Cohort QA Configuration
-# This file contains all configuration for the planner, AI, and TTS systems
-# Environment variables in .env will override these values
 
-# AI Configuration - Single Source of Truth
-# All AI provider, model, and voice settings are defined here
+# Browser settings
+browser:
+  headless: false
+  timeout: 30000 # milliseconds
+
+# Navigation settings
+navigation:
+  max_navigations: 10 # Maximum number of URL changes before stopping
+  wait_after_navigation: 2000 # Milliseconds to wait after navigation
+
+# Element extraction guardrails
+element_extraction:
+  # Elements to include by selector (whitelist approach)
+  # Only elements matching these selectors will be extracted
+  include_selectors:
+    - "a[href]"
+    - "button"
+    - "input"
+    - "select"
+    - "textarea"
+    - "[onclick]"
+    - "[role='button']"
+    - "[role='link']"
+    - "[role='tab']"
+    - "[role='menuitem']"
+    - "[tabindex]:not([tabindex='-1'])"
+    - "[contenteditable='true']"
+  
+  # Include elements that are not visible but might be interactable
+  include_invisible: false
+  
+  # Maximum number of elements to extract (0 = unlimited)
+  max_elements: 100
+
+# AI model configuration
 ai:
-  # Planner AI provider (for element selection)
-  planner:
-    provider: ollama  # Options: [heuristic, ollama, openai, anthropic]
-    model: mistral    # Model name (e.g., mistral, gpt-4o-mini, claude-3-haiku-20240307)
+  provider: "ollama" # or "openai", "anthropic", etc.
+  model: "qwen2.5-coder:14b"
+  base_url: "http://localhost:11434/api" # Ollama default
+  temperature: 0.7
+  max_tokens: 2000
   
-  # Generator AI provider (for test code generation)
-  generator:
-    provider: heuristic  # Options: [heuristic, ollama, openai, anthropic]
-    model: mistral    # Model name (e.g., mistral, gpt-4o-mini, claude-3-haiku-20240307)
-  
-  # Healer AI provider (for test healing)
-  healer:
-    provider: ollama  # Options: [heuristic, ollama, openai, anthropic]
-    model: mistral    # Model name (e.g., mistral, gpt-4o-mini, claude-3-haiku-20240307)
-  
-  # TTS provider (for text-to-speech)
-  tts:
-    provider: piper   # Options: [openai, piper, macos]
-    model: tts-1    # Model name (for OpenAI: [tts-1, tts-1-hd])
-    voice: amy        # Voice name
-                      # For OpenAI: [alloy, echo, fable, onyx, nova, shimmer]
-                      # For Piper: [amy, lessac, joe] or full path to .onnx file
-                      # For macOS: [Samantha, Alex, Victoria, etc.]
+  # Prompt configuration
+  prompt:
+    system_message: |
+      You are an AI assistant that analyzes web pages and selects the best interactive element to click.
+      You will receive a list of interactive elements and should return JSON with:
+      - elementIndex: the index of the element to interact with (0-based)
+      - action: the type of action ("click", "type", "select", etc.)
+      - value: optional value for type actions
+      - reasoning: brief explanation of your choice
+    
+    instructions: |
+      Analyze the provided interactive elements and select the best one to interact with.
+      Prioritize elements that:
+      1. Lead to new pages (links to different URLs)
+      2. Are likely to reveal more content
+      3. Are not already visited
+      4. Are user-facing and important
 
-# Planner Configuration
-planner:
-  maxClicks: 50
-  maxConsecutiveFailures: 10
-  elementWaitTimeout: 3000
-  clickTimeout: 5000
-  navigationWaitTimeout: 5000
-  pageSettleTimeout: 800
-  recentInteractionHistorySize: 50
-  maxElementsToShowAI: 12  # Reduced for faster AI processing
-  # Tags to ignore when detecting interactive elements
-  ignoredTags:
-    - header
-    - aside
-    - footer
-    - dbs-top-bar
-
-# TTS Configuration
-# Technical settings for TTS (provider/model/voice are in ai.tts above)
-tts:
-  # macOS say defaults (voice is set in ai.tts.voice above)
-  macos:
-    rate: 200  # Words per minute
-  
-  # OpenAI TTS defaults (model and voice are set in ai.tts above)
-  openai:
-    # Model and voice are configured in ai.tts above
-  
-  # Piper TTS defaults (voice is set in ai.tts.voice above)
-  piper:
-    # Piper detection paths
-    paths:
-      - piper
-      - piper-tts
-      - ~/.local/bin/piper
-      - ~/.local/bin/piper-tts
-      - ~/.local/pipx/venvs/piper-tts/bin/piper
-      - ~/.local/pipx/venvs/piper-tts/bin/piper-tts
-      - /usr/local/bin/piper
-      - /opt/homebrew/bin/piper
-    # Piper voice model paths (checked in order for auto-detection)
-    modelPaths:
-      - ~/.local/share/piper/voices/en/en_US/amy/medium/en_US-amy-medium.onnx
-      - ~/.local/share/piper/voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx
-      - ~/.local/share/piper/voices/en/en_US/joe/medium/en_US-joe-medium.onnx
-      - ~/.piper/voices/en/en_US/amy/medium/en_US-amy-medium.onnx
-      - /usr/local/share/piper/voices/en/en_US/amy/medium/en_US-amy-medium.onnx
-      - /opt/homebrew/share/piper/voices/en/en_US/amy/medium/en_US-amy-medium.onnx
-    # Piper voice shortcuts (maps friendly names to model paths)
-    voiceShortcuts:
-      amy: ~/.local/share/piper/voices/en/en_US/amy/medium/en_US-amy-medium.onnx
-      lessac: ~/.local/share/piper/voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx
-      joe: ~/.local/share/piper/voices/en/en_US/joe/medium/en_US-joe-medium.onnx
-  
-  # Cache settings
-  prefixCacheSize: 50
-  
-  # Fallback prefixes (used when AI is not available)
-  fallbackPrefixes:
-    realizing:
-      - "Oh!"
-      - "Hmm,"
-      - "Interesting,"
-      - "Look,"
-      - "Hey,"
-      - "Wow,"
-      - "Nice,"
-    deciding:
-      - "I think"
-      - "Let me try"
-      - "Maybe"
-      - "How about"
-      - "I'll go with"
-      - "Let's try"
-    acting:
-      - "Clicking"
-      - "Going for"
-      - "Trying"
-      - "Selecting"
-      - "Picking"
-      - "Choosing"
-  
-  # Fallback thinking messages
-  fallbackThinkingMessages:
-    - "Let me think which one to click"
-    - "Which one should I pick?"
-    - "Hmm, which one looks best?"
-    - "Let me pick the best one"
-    - "Which one should I try?"
-    - "Let me choose one"
-    - "Which one to go with?"
-    - "Let me decide which one"
+# Interaction settings
+interaction:
+  # Delay before interaction (milliseconds)
+  delay_before: 500
+  # Delay after interaction (milliseconds)
+  delay_after: 1000
+  # Timeout for waiting after interaction (milliseconds)
+  wait_timeout: 5000
 
