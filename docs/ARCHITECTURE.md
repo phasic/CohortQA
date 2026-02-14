@@ -119,56 +119,55 @@ The system is organized into two main components:
 
 ### Planner Component (`src/planner/`)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Planner (planner/index.ts)                    │
-│              Orchestrates web exploration flow                    │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-        ┌─────────────────────┼─────────────────────┐
-        │                       │                     │
-        ▼                       ▼                     ▼
-┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│   Config     │      │   Browser    │      │   Scanner    │
-│   Loader     │      │  Controller  │      │   (DOM)      │
-└──────────────┘      └──────────────┘      └──────────────┘
-                             │
-        ┌─────────────────────┼─────────────────────┐
-        │                       │                     │
-        ▼                       ▼                     ▼
-┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│  Extractor   │      │  AI Client    │      │ Interaction  │
-│  (Guardrails)│      │ (Ollama/LM)   │      │   Handler    │
-└──────────────┘      └──────────────┘      └──────────────┘
-                             │
-                             ▼
-                    ┌──────────────┐
-                    │ Navigation   │
-                    │   Tracker    │
-                    └──────────────┘
-                             │
-                             ▼
-                    ┌──────────────┐
-                    │  Test Plan   │
-                    │  Generator   │
-                    └──────────────┘
+```mermaid
+graph TD
+    Main[Planner Main<br/>planner/index.ts<br/>Orchestrates web exploration flow]
+    
+    Main --> Config[Config Loader]
+    Main --> Browser[Browser Controller]
+    Main --> Scanner[DOM Scanner]
+    
+    Browser --> Extractor[Element Extractor<br/>Guardrails]
+    Scanner --> Extractor
+    
+    Extractor --> AI[AI Client<br/>Ollama/LM Studio]
+    AI --> Interaction[Interaction Handler]
+    Interaction --> Tracker[Navigation Tracker]
+    Tracker -->|Loop| Extractor
+    Tracker --> TestPlanGen[Test Plan Generator]
+    TestPlanGen --> TestPlanMD[test-plan.md]
+    
+    style Main fill:#e1f5ff
+    style Config fill:#fff9c4
+    style Browser fill:#fff9c4
+    style Scanner fill:#fff9c4
+    style Extractor fill:#fff9c4
+    style AI fill:#fff9c4
+    style Interaction fill:#fff9c4
+    style Tracker fill:#fff9c4
+    style TestPlanGen fill:#c8e6c9
+    style TestPlanMD fill:#e8f5e9
 ```
 
 ### Generator Component (`src/generator/`)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  Generator (generator/index.ts)                  │
-│            Converts test plans to Playwright tests               │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-        ┌─────────────────────┼─────────────────────┐
-        │                       │                     │
-        ▼                       ▼                     ▼
-┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│ Test Plan    │      │ Playwright   │      │   Config     │
-│  Parser      │      │  Generator   │      │   Loader     │
-└──────────────┘      └──────────────┘      └──────────────┘
+```mermaid
+graph TD
+    Main[Generator Main<br/>generator/index.ts<br/>Converts test plans to Playwright tests]
+    
+    Main --> Parser[Test Plan Parser]
+    Main --> CodeGen[Playwright Generator]
+    Main --> Config[Config Loader]
+    
+    Parser -->|Parsed data| CodeGen
+    Config -->|Cookie settings| CodeGen
+    CodeGen --> TestFile[tests/*.spec.ts]
+    
+    style Main fill:#fff4e1
+    style Parser fill:#fff9c4
+    style CodeGen fill:#fff9c4
+    style Config fill:#fff9c4
+    style TestFile fill:#e8f5e9
 ```
 
 ## Component Responsibilities
