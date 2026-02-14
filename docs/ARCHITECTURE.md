@@ -8,6 +8,158 @@ Cohort QA is an AI-powered web exploration system that automatically navigates t
 3. Performing the interaction
 4. Tracking navigations until a limit is reached
 
+## System Architecture Flow
+
+The Cohort QA system consists of three main components that work together:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Cohort QA System                             │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+        ┌──────────────────────┼──────────────────────┐
+        │                      │                      │
+        ▼                      ▼                      ▼
+┌───────────────┐      ┌───────────────┐      ┌───────────────┐
+│   PLANNER     │      │   GENERATOR    │      │   HEALER      │
+│               │      │                │      │   (Future)    │
+│ Explores      │─────▶│ Reads test     │─────▶│ Fixes broken │
+│ website       │      │ plan, generates│      │ tests         │
+│               │      │ Playwright     │      │               │
+│ Generates     │      │ test suite     │      │ Updates       │
+│ test plan     │      │                │      │ selectors     │
+│ (markdown)    │      │                │      │               │
+└───────────────┘      └───────────────┘      └───────────────┘
+        │                      │                      │
+        │                      │                      │
+        ▼                      ▼                      ▼
+┌───────────────┐      ┌───────────────┐      ┌───────────────┐
+│ test-plan/    │      │ tests/        │      │ tests/        │
+│ test-plan.md  │      │ *.spec.ts     │      │ *.spec.ts     │
+│               │      │               │      │ (updated)     │
+└───────────────┘      └───────────────┘      └───────────────┘
+```
+
+### Component Flow
+
+```mermaid
+flowchart TD
+    Start([Start]) --> Planner[Planner Component]
+    
+    Planner --> |1. Explore website| Explore[Browser Automation]
+    Explore --> |2. Scan DOM| Scan[DOM Scanner]
+    Scan --> |3. Extract elements| Extract[Element Extractor]
+    Extract --> |4. AI selection| AI[AI Client]
+    AI --> |5. Interact| Interact[Interaction Handler]
+    Interact --> |6. Track navigation| Track[Navigation Tracker]
+    Track --> |Loop until max| Extract
+    Track --> |7. Generate test plan| TestPlan[Test Plan Generator]
+    TestPlan --> |Output| TestPlanMD[test-plan/test-plan.md]
+    
+    TestPlanMD --> Generator[Generator Component]
+    
+    Generator --> |1. Parse markdown| Parser[Test Plan Parser]
+    Parser --> |2. Generate code| CodeGen[Playwright Generator]
+    CodeGen --> |3. Create locators| Locators[Smart Locator Generation]
+    Locators --> |4. Generate assertions| Assertions[Assertion Generator]
+    Assertions --> |Output| TestFile[tests/*.spec.ts]
+    
+    TestFile --> |Run tests| RunTests[Playwright Test Runner]
+    RunTests --> |Tests pass?| TestResult{Test Result}
+    
+    TestResult -->|Pass| Success([Success])
+    TestResult -->|Fail| Healer[Healer Component - Future]
+    
+    Healer --> |1. Analyze failures| Analyze[Failure Analyzer]
+    Analyze --> |2. Identify broken selectors| Identify[Selector Identifier]
+    Identify --> |3. Find new selectors| FindNew[Selector Finder]
+    FindNew --> |4. Update test file| Update[Test Updater]
+    Update --> |Output| TestFileUpdated[tests/*.spec.ts - Updated]
+    TestFileUpdated --> RunTests
+    
+    style Planner fill:#e1f5ff
+    style Generator fill:#fff4e1
+    style Healer fill:#ffe1f5
+    style TestPlanMD fill:#e8f5e9
+    style TestFile fill:#e8f5e9
+    style Success fill:#c8e6c9
+```
+
+### Data Flow Between Components
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         PLANNER                                 │
+│                                                                  │
+│  Input:                                                          │
+│  • config.yaml                                                   │
+│  • Start URL (command line or config)                           │
+│                                                                  │
+│  Process:                                                        │
+│  • Browser automation                                            │
+│  • DOM scanning (including shadow DOM)                          │
+│  • Element extraction with guardrails                            │
+│  • AI-powered element selection                                  │
+│  • Interaction execution                                         │
+│  • Navigation tracking                                           │
+│  • Notable element identification                                │
+│                                                                  │
+│  Output:                                                         │
+│  └──▶ test-plan/test-plan.md                                    │
+│      • Start URL                                                 │
+│      • Steps with actions (click, type, etc.)                    │
+│      • Element details (selector, text, href, XPath, ID)        │
+│      • Expected results (URL, title, notable elements)           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       GENERATOR                                  │
+│                                                                  │
+│  Input:                                                          │
+│  • test-plan/test-plan.md                                        │
+│  • config.yaml (for cookie settings)                            │
+│                                                                  │
+│  Process:                                                        │
+│  • Parse markdown test plan                                      │
+│  • Generate Playwright test code                                 │
+│  • Create smart locators (ID, XPath, selector+href+text)         │
+│  • Generate cookie setup code                                    │
+│  • Create assertions for expected results                        │
+│                                                                  │
+│  Output:                                                         │
+│  └──▶ tests/[url-timestamp].spec.ts                             │
+│      • Descriptive test blocks                                   │
+│      • Specific locators to avoid strict mode violations         │
+│      • Cookie configuration                                      │
+│      • Assertions for URLs, titles, and notable elements        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        HEALER                                    │
+│                      (Future Component)                          │
+│                                                                  │
+│  Input:                                                          │
+│  • tests/*.spec.ts (failing tests)                              │
+│  • test-plan/test-plan.md (original plan)                       │
+│  • Test execution results                                        │
+│                                                                  │
+│  Process:                                                        │
+│  • Analyze test failures                                         │
+│  • Identify broken selectors                                    │
+│  • Re-scan DOM to find new selectors                            │
+│  • Update test file with new locators                            │
+│  • Verify fixes work                                            │
+│                                                                  │
+│  Output:                                                         │
+│  └──▶ tests/*.spec.ts (updated)                                  │
+│      • Fixed locators                                            │
+│      • New selectors that work                                   │
+│      • Updated assertions if needed                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Component Architecture
 
 The system is organized into two main components:
