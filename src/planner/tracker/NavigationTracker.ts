@@ -31,7 +31,7 @@ export class NavigationTracker {
     if (!this.visitedUrls.has(normalized)) {
       this.visitedUrls.add(normalized);
       this.navigationCount++;
-      console.log(`📍 New navigation detected (${this.navigationCount}): ${currentUrl}`);
+      console.log(`    📍 New navigation detected (${this.navigationCount}): ${currentUrl}`);
       return true;
     }
     
@@ -57,6 +57,21 @@ export class NavigationTracker {
    */
   hasReachedMax(maxNavigations: number): boolean {
     return this.navigationCount >= maxNavigations;
+  }
+
+  /**
+   * Checks if a URL has already been visited
+   */
+  hasVisited(url: string): boolean {
+    const normalized = this.normalizeUrl(url);
+    return this.visitedUrls.has(normalized);
+  }
+
+  /**
+   * Normalizes a URL (public method for use by other components)
+   */
+  normalizeUrlForComparison(url: string): string {
+    return this.normalizeUrl(url);
   }
 }
 

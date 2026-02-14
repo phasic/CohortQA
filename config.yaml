@@ -1,20 +1,49 @@
 # Cohort QA Configuration
 
+# Starting URL (can be overridden with -u command line argument)
+start_url: "https://www.ing.be/en/individuals"
+
+# Path restriction (optional)
+# If set, the script will only navigate within this path and its subpaths
+# Example: "https://www.ing.be/product/7230/open" allows:
+#   - /product/7230/open
+#   - /product/7230/open?param=value
+#   - /product/7230/open/details
+# But blocks navigation to other paths like /other-page
+# If not set, defaults to staying on the domain of start_url
+stay_on_path: null
+
 # Browser settings
 browser:
   headless: false
   timeout: 30000 # milliseconds
+  # Cookies to set in the browser
+  # Each cookie can have: name (required), value (required), domain (optional), path (optional), secure (optional), sameSite (optional), httpOnly (optional)
+  # If domain/path/secure/sameSite/httpOnly are not specified, they will be auto-detected from the current page URL
+  cookies:
+    - name: "cookiesOptin"
+      value: "true"
+    # Add more cookies as needed:
+    # - name: "sessionId"
+    #   value: "abc123"
+    #   domain: ".example.com"  # Optional: specific domain (use leading dot for subdomain matching)
+    #   path: "/"                # Optional: cookie path (default: "/")
+    #   secure: true             # Optional: HTTPS only (default: auto-detected from URL)
+    #   sameSite: "Lax"          # Optional: "Strict", "Lax", or "None" (default: "Lax")
+    #   httpOnly: false          # Optional: JavaScript accessible (default: false)
 
 # Navigation settings
 navigation:
-  max_navigations: 10 # Maximum number of URL changes before stopping
+  max_navigations: 3 # Maximum number of URL changes before stopping
+  max_loops: 10 # Maximum number of loop iterations before stopping (0 = unlimited)
   wait_after_navigation: 2000 # Milliseconds to wait after navigation
+  stay_on_domain: true # Block navigation away from the starting domain
 
 # Element extraction guardrails
 element_extraction:
   # Elements to include by selector (whitelist approach)
   # Only elements matching these selectors will be extracted
-  include_selectors:
+  interactable_elements:
     - "a[href]"
     - "button"
     - "input"
@@ -27,20 +56,55 @@ element_extraction:
     - "[role='menuitem']"
     - "[tabindex]:not([tabindex='-1'])"
     - "[contenteditable='true']"
+
+  # Enable/disable notable elements identification (default: true)
+  # When enabled, the script will identify notable elements on each page for the test plan
+  enable_notable_elements: true
+  
+  # Selectors for notable elements to identify on pages (for test plan)
+  # These elements will be collected and sent to AI to identify which are notable
+  notable_elements:
+    - "h1"
+    - "h2"
+    - "h3"
+    - "button"
+    - "[role='button']"
+    - "input"
+    - "textarea"
+    - "select"
+    - "[role='alert']"
+    - "[role='status']"
+    - "main"
+    - "article"
+    - "section"
+    - "nav a"
+    - ".cta"
+    - ".button"
+    - "[class*='btn']"
+  
+  # Tags to blacklist (elements with these tags and all their children will be ignored)
+  # Use lowercase tag names (e.g., "nav", "footer", "header", "aside")
+  blacklist_tags:
+    - "dbs-top-bar"
+    - "header"
+    - "footer"
   
   # Include elements that are not visible but might be interactable
   include_invisible: false
   
   # Maximum number of elements to extract (0 = unlimited)
   max_elements: 100
+  
+
 
 # AI model configuration
 ai:
-  provider: "ollama" # or "openai", "anthropic", etc.
-  model: "qwen2.5-coder:14b"
-  base_url: "http://localhost:11434/api" # Ollama default
-  temperature: 0.7
-  max_tokens: 2000
+  provider: "lmstudio" # or "ollama", "openai", "anthropic", etc.
+  model: "qwen2.5-coder:14b" # Use the exact model name as shown in LM Studio
+  base_url: "http://localhost:1234" # LM Studio default (or "http://localhost:1234/v1")
+  temperature: 0.5 # Lower = faster, more deterministic (0.3-0.7 recommended)
+  max_tokens: 500 # Reduced for faster responses (JSON response is small)
+  max_elements_in_prompt: 50 # Limit elements sent to AI to reduce prompt size (0 = unlimited)
   
   # Prompt configuration
   prompt:
@@ -54,18 +118,39 @@ ai:
     
     instructions: |
       Analyze the provided interactive elements and select the best one to interact with.
-      Prioritize elements that:
-      1. Lead to new pages (links to different URLs)
-      2. Are likely to reveal more content
-      3. Are not already visited
-      4. Are user-facing and important
+      
+      PRIORITY ORDER (highest to lowest):
+      1. Investment-related content: Prioritize links/buttons related to investments
+      2. Main content links: STRONGLY prefer links within the main page content area over navigation menus
+      3. Lead to new pages: Prefer links that navigate to different URLs (not anchors to same page)
+      4. Not already visited: Avoid elements that link to URLs you've already visited
+      5. User-facing content: Select elements that are part of the main content area
+      
+      NAVIGATION GUIDELINES:
+      - PRIMARY: Click through content pages (links within articles, main content sections, product pages)
+      - SECONDARY: Use sidebar/navigation menus only when necessary to reach investment-related pages not accessible through content links
+      - AVOID OVERUSE: Don't repeatedly click navigation menus - prefer exploring content pages
+      - HEADER/FOOTER: Generally avoid header and footer navigation unless it's the only way to reach important investment content
+      
+      FOCUS ON (in order of preference):
+      1. Links within article content or main page sections that lead to investment-related pages
+      2. Call-to-action buttons in the main content area ("Learn more", "View details", "Get started")
+      3. Product/service links embedded in the main content
+      4. Investment, savings, or account-related links in content areas
+      5. Sidebar navigation links to investment-related sections (only if no good content links available)
+      
+      AVOID (unless no better options):
+      - Repeatedly clicking main navigation menus
+      - Header/footer navigation when content links are available
+      - Breadcrumb links
+      - Elements with generic text like "Home", "Menu", "Back", "Top"
 
 # Interaction settings
 interaction:
   # Delay before interaction (milliseconds)
-  delay_before: 500
+  delay_before: 200
   # Delay after interaction (milliseconds)
-  delay_after: 1000
-  # Timeout for waiting after interaction (milliseconds)
-  wait_timeout: 5000
+  delay_after: 300
+  # Timeout for waiting after interaction (milliseconds) - only used if navigation occurs
+  wait_timeout: 1500
 

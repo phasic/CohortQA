@@ -7,17 +7,22 @@
   "scripts": {
     "build": "tsc",
     "start": "npm run build && node dist/index.js",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "generator": "npm run build && node dist/generator/index.js",
+    "planner": "npm run build && node dist/planner/index.js",
+    "test": "npm run build && node dist/scripts/test-selector.js"
   },
   "keywords": ["ai", "automation", "testing", "playwright"],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@playwright/test": "^1.40.0",
+    "inquirer": "^9.2.12",
     "js-yaml": "^4.1.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/inquirer": "^9.0.3",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.10.0",
     "typescript": "^5.3.3"

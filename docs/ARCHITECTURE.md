@@ -231,7 +231,7 @@ interaction:     # Delays and timeouts
 The architecture supports extension through:
 
 1. **Additional AI providers**: Extend `AIClient` with new provider methods
-2. **Custom selectors**: Modify `include_selectors` in config
+2. **Custom selectors**: Modify `interactable_elements` in config
 3. **New interaction types**: Add methods to `InteractionHandler`
 4. **Additional guardrails**: Extend `ElementExtractor` filtering logic
 5. **Custom navigation tracking**: Extend `NavigationTracker` with custom URL normalization
