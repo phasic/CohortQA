@@ -12,32 +12,26 @@ Cohort QA is an AI-powered web exploration system that automatically navigates t
 
 The Cohort QA system consists of three main components that work together:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Cohort QA System                             │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-        ┌──────────────────────┼──────────────────────┐
-        │                      │                      │
-        ▼                      ▼                      ▼
-┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│   PLANNER     │      │   GENERATOR    │      │   HEALER      │
-│               │      │                │      │   (Future)    │
-│ Explores      │─────▶│ Reads test     │─────▶│ Fixes broken │
-│ website       │      │ plan, generates│      │ tests         │
-│               │      │ Playwright     │      │               │
-│ Generates     │      │ test suite     │      │ Updates       │
-│ test plan     │      │                │      │ selectors     │
-│ (markdown)    │      │                │      │               │
-└───────────────┘      └───────────────┘      └───────────────┘
-        │                      │                      │
-        │                      │                      │
-        ▼                      ▼                      ▼
-┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│ test-plan/    │      │ tests/        │      │ tests/        │
-│ test-plan.md  │      │ *.spec.ts     │      │ *.spec.ts     │
-│               │      │               │      │ (updated)     │
-└───────────────┘      └───────────────┘      └───────────────┘
+```mermaid
+graph TB
+    System[Cohort QA System]
+    
+    System --> Planner[PLANNER<br/>Explores website<br/>Generates test plan]
+    System --> Generator[GENERATOR<br/>Reads test plan<br/>Generates Playwright test suite]
+    System --> Healer[HEALER<br/>Fixes broken tests<br/>Updates selectors<br/>Future Component]
+    
+    Planner -->|Generates| TestPlan[test-plan/<br/>test-plan.md]
+    TestPlan -->|Reads| Generator
+    Generator -->|Generates| TestFiles[tests/<br/>*.spec.ts]
+    TestFiles -->|Fixes| Healer
+    Healer -->|Updates| TestFilesUpdated[tests/<br/>*.spec.ts<br/>Updated]
+    
+    style Planner fill:#e1f5ff
+    style Generator fill:#fff4e1
+    style Healer fill:#ffe1f5
+    style TestPlan fill:#e8f5e9
+    style TestFiles fill:#e8f5e9
+    style TestFilesUpdated fill:#e8f5e9
 ```
 
 ### Component Flow
@@ -87,77 +81,36 @@ flowchart TD
 
 ### Data Flow Between Components
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         PLANNER                                 │
-│                                                                  │
-│  Input:                                                          │
-│  • config.yaml                                                   │
-│  • Start URL (command line or config)                           │
-│                                                                  │
-│  Process:                                                        │
-│  • Browser automation                                            │
-│  • DOM scanning (including shadow DOM)                          │
-│  • Element extraction with guardrails                            │
-│  • AI-powered element selection                                  │
-│  • Interaction execution                                         │
-│  • Navigation tracking                                           │
-│  • Notable element identification                                │
-│                                                                  │
-│  Output:                                                         │
-│  └──▶ test-plan/test-plan.md                                    │
-│      • Start URL                                                 │
-│      • Steps with actions (click, type, etc.)                    │
-│      • Element details (selector, text, href, XPath, ID)        │
-│      • Expected results (URL, title, notable elements)           │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       GENERATOR                                  │
-│                                                                  │
-│  Input:                                                          │
-│  • test-plan/test-plan.md                                        │
-│  • config.yaml (for cookie settings)                            │
-│                                                                  │
-│  Process:                                                        │
-│  • Parse markdown test plan                                      │
-│  • Generate Playwright test code                                 │
-│  • Create smart locators (ID, XPath, selector+href+text)         │
-│  • Generate cookie setup code                                    │
-│  • Create assertions for expected results                        │
-│                                                                  │
-│  Output:                                                         │
-│  └──▶ tests/[url-timestamp].spec.ts                             │
-│      • Descriptive test blocks                                   │
-│      • Specific locators to avoid strict mode violations         │
-│      • Cookie configuration                                      │
-│      • Assertions for URLs, titles, and notable elements        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        HEALER                                    │
-│                      (Future Component)                          │
-│                                                                  │
-│  Input:                                                          │
-│  • tests/*.spec.ts (failing tests)                              │
-│  • test-plan/test-plan.md (original plan)                       │
-│  • Test execution results                                        │
-│                                                                  │
-│  Process:                                                        │
-│  • Analyze test failures                                         │
-│  • Identify broken selectors                                    │
-│  • Re-scan DOM to find new selectors                            │
-│  • Update test file with new locators                            │
-│  • Verify fixes work                                            │
-│                                                                  │
-│  Output:                                                         │
-│  └──▶ tests/*.spec.ts (updated)                                  │
-│      • Fixed locators                                            │
-│      • New selectors that work                                   │
-│      • Updated assertions if needed                              │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph Planner["PLANNER"]
+        PInput[Input:<br/>• config.yaml<br/>• Start URL]
+        PProcess[Process:<br/>• Browser automation<br/>• DOM scanning<br/>• Element extraction<br/>• AI selection<br/>• Interaction<br/>• Navigation tracking<br/>• Notable element identification]
+        POutput[Output:<br/>test-plan/test-plan.md<br/>• Start URL<br/>• Steps with actions<br/>• Element details<br/>• Expected results]
+        PInput --> PProcess --> POutput
+    end
+    
+    subgraph Generator["GENERATOR"]
+        GInput[Input:<br/>• test-plan/test-plan.md<br/>• config.yaml]
+        GProcess[Process:<br/>• Parse markdown<br/>• Generate Playwright code<br/>• Create smart locators<br/>• Generate cookie setup<br/>• Create assertions]
+        GOutput[Output:<br/>tests/*.spec.ts<br/>• Descriptive test blocks<br/>• Specific locators<br/>• Cookie configuration<br/>• Assertions]
+        GInput --> GProcess --> GOutput
+    end
+    
+    subgraph Healer["HEALER (Future)"]
+        HInput[Input:<br/>• tests/*.spec.ts<br/>• test-plan/test-plan.md<br/>• Test results]
+        HProcess[Process:<br/>• Analyze failures<br/>• Identify broken selectors<br/>• Re-scan DOM<br/>• Update test file<br/>• Verify fixes]
+        HOutput[Output:<br/>tests/*.spec.ts<br/>• Fixed locators<br/>• New selectors<br/>• Updated assertions]
+        HInput --> HProcess --> HOutput
+    end
+    
+    POutput -->|Reads| GInput
+    GOutput -->|Fixes| HInput
+    HOutput -.->|Re-run| GOutput
+    
+    style Planner fill:#e1f5ff
+    style Generator fill:#fff4e1
+    style Healer fill:#ffe1f5
 ```
 
 ## Component Architecture
